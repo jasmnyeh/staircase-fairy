@@ -1,19 +1,17 @@
-from flask import Flask, request, jsonify, redirect
+from flask import Flask, request, jsonify
 import os
-import sqlite3  # For storing scan logs
+import sqlite3
 import datetime
-from math import radians, cos, sin, sqrt, atan2
+# from math import radians, cos, sin, sqrt, atan2
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent, LocationMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent, PostbackEvent, PostbackAction, TemplateSendMessage, ButtonsTemplate, LocationMessage
 
 app = Flask(__name__)
 
 # Securely store access token and channel secret
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN", "YOUR_ACCESS_TOKEN_HERE")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "YOUR_CHANNEL_SECRET_HERE")
-BOT_ID = "@925keedn"
-BOT_FRIEND_INVITE_URL = "https://line.me/R/ti/p/%40925keedn"
 
 line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -22,47 +20,36 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 conn = sqlite3.connect("scans.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# create scan_logs table to store QR scan records
+# Create scan_logs table to store QR scan records
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS scan_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT,
         floor TEXT,
         location TEXT,
-        gps_lat REAL,
-        gps_lng REAL,
         timestamp TEXT
     )
 """)
 conn.commit()
 
-# Create user_settings table to store user consent for location sharing
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS user_settings (
-        user_id TEXT PRIMARY KEY,
-        location_consent INTEGER DEFAULT 0
-    )
-""")
-conn.commit()
-
-# Predefined QR code locations 
-# need to change when changing locations!!!
-QR_LOCATIONS = {
-    "1F_機械系館_1": (25.031757, 121.544729),
-    "2F_機械系館_1": (25.031757, 121.544729),
-    "3F_機械系館_1": (25.031757, 121.544729),
-    "4F_機械系館_1": (25.031757, 121.544729),
-    "5F_機械系館_1": (25.031757, 121.544729)
-}
+# # Create user_settings table to store location sharing consent
+# cursor.execute("""
+#     CREATE TABLE IF NOT EXISTS user_settings (
+#         user_id TEXT PRIMARY KEY,
+#         location_consent INTEGER DEFAULT 0
+#     )
+# """)
+# conn.commit()
 
 def send_line_message(user_id, message):
-    """ Sends a message from the line bot to the user """
+    """ Sends a text message from the LINE bot to the user. """
     try:
         line_bot_api.push_message(user_id, TextSendMessage(text=message))
     except Exception as e:
         print(f"🚨 Failed to send LINE message: {e}")
 
 def calculate_distance(lat1, lon1, lat2, lon2):
+    """ Calculates distance between two GPS coordinates in meters. """
     R = 6371000  # Radius of Earth in meters
     dlat = radians(lat2 - lat1)
     dlon = radians(lon2 - lon1)
@@ -70,111 +57,117 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     c = 2 * atan2(sqrt(a), sqrt(1-a))
     return R * c
 
-@app.route("/scan_qr", methods=["GET"])
-def scan_qr():
-    """
-    When the user scans a QR code, this route requests GPS permission.
-    """
-    floor = request.args.get("floor", "Unknown")
-    location = request.args.get("location", "Unknown")
-    user_id = request.args.get("user_id") # LINE user id must be passed
+# what should I do when the user first adds the bot? 
+# have to modify!!
+@handler.add(FollowEvent) 
+def handle_follow(event):
+    """ When a user adds the bot, ask for GPS location sharing consent. """
+    user_id = event.source.user_id
 
-    if not user_id:
-        return redirect(BOT_FRIEND_INVITE_URL, code = 302) # Redirect to add bot
-    return render_template("request_location.html", floor=floor, location=location, user_id=user_id)
+    # send welcome message to user :) might need to modify? not sure
+    send_line_message(user_id, "Hi {user_id}! Welcome to Staircase Fairy! \n哈囉 {user_id}! 歡迎來到樓梯精靈！")
 
-@app.route("/verify_location", methods=["POST"])
-def verify_location():
-    """
-    Receives GPS coordinates from the user and verifies their proximity to the QR code.
-    If valid, logs the scan and sends a success message via LINE.
-    """
-    try:
-        user_lat = float(request.form.get("latitude"))
-        user_lng = float(request.form.get("longitude"))
-        floor = request.form.get("floor")
-        location = request.form.get("location")
-        user_id = request.form.get("user_id")
+    # # Store user in the database with default consent = 0 (not agreed yet)
+    # cursor.execute("INSERT OR IGNORE INTO user_settings (user_id, location_consent) VALUES (?, 0)", (user_id,))
+    # conn.commit()
 
-        qr_key = f"{floor}_{location.replace(' ', '_')}"
-        expected_lat, expected_lng = QR_LOCATIONS.get(qr_key, (None, None))
+    # # Create Yes/No button template message
+    # buttons_template = TemplateSendMessage(
+    #     alt_text="Would you like to share your location for QR scans?",
+    #     template=ButtonsTemplate(
+    #         text="📍 To track your stair-climbing progress, we need access to your location. Do you agree?",
+    #         actions=[
+    #             PostbackAction(label="Yes", data="agree_location"),
+    #             PostbackAction(label="No", data="deny_location")
+    #         ]
+    #     )
+    # )
     
-        if expected_lat is None:
-            send_line_message(user_id, "🚫 Invalid QR code.")
-            return "Invalid QR code", 400
-        
-        # check if user is within 20 meters of the QR location
-        distance = calculate_distance(user_lat, user_lng, expected_lat, expected_lng)
+    # line_bot_api.push_message(user_id, buttons_template)
 
-        if distance > 20:
-            send_line_message(user_id, "🚫 You are too far from the QR code location. Scan invalid.")
-            return "Too far from QR location", 400
-        
-        # log scan if within range
-        timestamp = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-        cursor.execute("INSERT INTO scan_logs (user_id, floor, location, timestamp) VALUES (?, ?, ?, ?)", 
-                       (user_id, floor, location, timestamp))
+# handle responses from buttons
+@handler.add(PostbackEvent)
+def handle_postback(event):
+    """ Handle user response to location sharing consent. """
+    user_id = event.source.user_id
+    postback_data = event.postback.data
+
+    if postback_data == "agree_location":
+        cursor.execute("UPDATE user_settings SET location_consent = 1 WHERE user_id = ?", (user_id,))
         conn.commit()
-
-        # send success message via LINE bot
-        success_message = f"✅ Scan successful!\n📍 Location: {location}\n🏢 Floor: {floor}\n🕒 Time: {timestamp}"
-        send_line_message(user_id, success_message)
-
-        return "Scan logged successfully", 200
-    
-    except Exception as e:
-        return f"🚨 Error processing GPS verification: {e}", 500
+        send_line_message(user_id, "✅ You have agreed to share your location! QR scans will now verify your GPS position automatically.")
+    elif postback_data == "deny_location":
+        send_line_message(user_id, "🚨 You have denied location sharing. You will be asked again during each QR scan.")
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    """
-    Handles text messages from users and logs scan data.
-    """
+    """ Handles QR code scan messages and checks user consent before requesting GPS location. """
     try:
-        user_message = event.message.text  # Get the message content
-        user_message_stripped = event.message.text.strip().lower()
-        user_id = event.source_user_id
+        user_message = event.message.text
+        user_message_stripped_lower = event.message.text.strip().lower()
+        user_id = event.source.user_id
 
-        print(f"📌 Received message from {user_id}: {user_message}")
+        if user_message.startswith("STAIRCASE_QR_"):
+            _, _, floor, location, qr_lat, qr_lng = user_message.split("_")
+            print(f"Floor: {floor}")         # Output: 1F
+            print(f"Location: {location}")   # Output: 機械系館_1
+            print(f"Latitude: {qr_lat}")     # Output: 25.031757
+            print(f"Longitude: {qr_lng}")    # Output: 121.544729
+            qr_lat, qr_lng = float(qr_lat), float(qr_lng)
 
-        # Check if the user is agreeing to location sharing
-        if user_message == "i agree":
-            cursor.execute("UPDATE user_settings SET location_consent = 1 WHERE user_id = ?", (user_id,))
-            conn.commit()
+            # Check if the user has agreed to share location
+            cursor.execute("SELECT location_consent FROM user_settings WHERE user_id = ?", (user_id,))
+            result = cursor.fetchone()
 
-            send_line_message(user_id, "✅ You have agreed to share your location! QR scans will now use your GPS automatically.")
-            return
-        # would this led to a problem where if the user type i agree then it'll send this??
+            if not result or result[0] == 0:
+                send_line_message(user_id, "🚨 You need to agree to location sharing first.")
+                handle_follow(event)  # Re-send the consent message
+                return
 
-        # Handle regular text messages
-        reply_text = f"You said: {user_message}"
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=reply_text)
-        )
+            # Request user location
+            request_user_location(user_id, floor, location, qr_lat, qr_lng)
 
     except Exception as e:
         app.logger.error(f"Error handling message: {e}")
 
-@handler.add(FollowEvent)
-def handle_follow(event):
-    """
-    Triggered when a user adds the bot as a friend.
-    Sends a message asking for location sharing consent.
-    """
-    user_id = event.source.user_id
+def request_user_location(user_id, floor, location, qr_lat, qr_lng):
+    """ Sends a location request to the user inside LINE. """
+    send_line_message(user_id, "📍 Please share your current location to verify your QR scan.")
+    line_bot_api.push_message(user_id, TextSendMessage(text="Tap '+' in the chat and select 'Location'."))
 
-    # Store user in the database with default consent = 0 (hasn't agreed)
-    cursor.execute("INSERT OR IGNORE INTO user_setting (user_id, location_consent) VALUES (?, 0)", (user_id,))
-    conn.commit()
+@handler.add(MessageEvent, message=LocationMessage)
+def handle_location(event):
+    """ Handles location messages sent by users and validates against the QR location. """
+    try:
+        user_id = event.source.user_id
+        user_lat = event.message.latitude
+        user_lng = event.message.longitude
 
-    consent_message = (
-        "📍 To track your stair-climbing progress, we need access to your location.\n\n"
-        "Do you agree to share your location when scanning a QR code?\n"
-        "Reply with 'I agree' to continue."
-    )
+        # Retrieve the last scanned QR code location
+        cursor.execute("SELECT floor, location, gps_lat, gps_lng FROM scan_logs WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1", (user_id,))
+        scan_data = cursor.fetchone()
 
-    line_bot_api.push_message(user_id, TextSendMessage(text=consent_message))
+        if not scan_data:
+            send_line_message(user_id, "🚫 No QR scan detected. Please scan a QR code first.")
+            return
+
+        floor, location, qr_lat, qr_lng = scan_data
+        distance = calculate_distance(user_lat, user_lng, qr_lat, qr_lng)
+
+        if distance > 20:
+            send_line_message(user_id, "🚫 You are too far from the QR code location. Scan invalid.")
+            return
+
+        timestamp = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        cursor.execute("INSERT INTO scan_logs (user_id, floor, location, gps_lat, gps_lng, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                       (user_id, floor, location, user_lat, user_lng, timestamp))
+        conn.commit()
+
+        success_message = f"✅ Scan successful!\n📍 Location: {location}\n🏢 Floor: {floor}\n🕒 Time: {timestamp}"
+        send_line_message(user_id, success_message)
+
+    except Exception as e:
+        app.logger.error(f"Error handling location: {e}")
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
