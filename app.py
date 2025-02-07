@@ -99,33 +99,55 @@ def handle_postback(event):
     elif postback_data == "deny_location":
         send_line_message(user_id, "🚨 You have denied location sharing. You will be asked again during each QR scan.")
 
+# handle messages from users
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    """ Handles QR code scan messages and checks user consent before requesting GPS location. """
+    """ 
+    Handles QR code scan messages
+    - Ensures no duplicate scans within 15 seconds
+    - Logs successful scans. 
+    """
     try:
         user_message = event.message.text
         user_message_stripped_lower = event.message.text.strip().lower()
         user_id = event.source.user_id
 
         if user_message.startswith("STAIRCASE_QR_"):
-            _, _, floor, location, qr_lat, qr_lng = user_message.split("_")
+            _, _, floor, location = user_message.split("_")
             print(f"Floor: {floor}")         # Output: 1F
             print(f"Location: {location}")   # Output: 機械系館_1
-            print(f"Latitude: {qr_lat}")     # Output: 25.031757
-            print(f"Longitude: {qr_lng}")    # Output: 121.544729
-            qr_lat, qr_lng = float(qr_lat), float(qr_lng)
+            # print(f"Latitude: {qr_lat}")     # Output: 25.031757
+            # print(f"Longitude: {qr_lng}")    # Output: 121.544729
+            # qr_lat, qr_lng = float(qr_lat), float(qr_lng)
 
-            # Check if the user has agreed to share location
-            cursor.execute("SELECT location_consent FROM user_settings WHERE user_id = ?", (user_id,))
-            result = cursor.fetchone()
+            # Get the current timestamp
+            current_time = datetime.datetime.now()
 
-            if not result or result[0] == 0:
-                send_line_message(user_id, "🚨 You need to agree to location sharing first.")
-                handle_follow(event)  # Re-send the consent message
-                return
+            # Check the last scan time for the user
+            cursor.execute("""
+                SELECT timestamp FROM scan_logs WHERE user_id = ? 
+                ORDER BY timestamp DESC LIMIT 1
+            """, (user_id,))
+            last_scan = cursor.fetchone()
 
-            # Request user location
-            request_user_location(user_id, floor, location, qr_lat, qr_lng)
+            if last_scan:
+                last_scan_time = datetime.datetime.strptime(last_scan[0], "%Y/%m/%d %H:%M:%S")
+                time_difference = (current_time - last_scan_time).total_seconds()
+
+                if time_difference < 15:
+                    send_line_message(user_id, "🚫 You must wait at least 15 seconds before scanning again.")
+                    return
+                
+            # Log the scan in the database
+            timestamp = current_time.strftime("%Y/%m/%d %H:%M:%S")
+            cursor.execute("INSERT INTO scan_logs (user_id, floor, location, timestamp) VALUES (?, ?, ?, ?)", 
+                           (user_id, floor, location, timestamp))
+            conn.commit()
+
+            # Send success message
+            success_message = f"✅ Scan successful!\n📍 Location: {location}\n🏢 Floor: {floor}\n🕒 Time: {timestamp}"
+            send_line_message(user_id, success_message)
+
 
     except Exception as e:
         app.logger.error(f"Error handling message: {e}")
