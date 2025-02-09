@@ -30,16 +30,27 @@ cursor.execute("""
         timestamp TEXT
     )
 """)
+conn.commit() # Saves changes to the database
+
+# Create 
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS all_user_points (
+        user_id TEXT PRIMARY KEY,
+        points INTEGER DEFAULT 0,
+        level INTEGER DEFAULT 0,
+        points_to_next_level INTEGER DEFAULT 0,
+        ranking INTEGER DEFAULT NULL
+    )
+""")
 conn.commit()
 
-# # Create user_settings table to store location sharing consent
-# cursor.execute("""
-#     CREATE TABLE IF NOT EXISTS user_settings (
-#         user_id TEXT PRIMARY KEY,
-#         location_consent INTEGER DEFAULT 0
-#     )
-# """)
-# conn.commit()
+def bold_text(text):
+    """ Converts text to fullwidth bold Unicode characters. """
+    bold_map = str.maketrans(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+        "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"
+    )
+    return text.translate(bold_map)
 
 def send_line_message(user_id, message):
     """ Sends a text message from the LINE bot to the user. """
@@ -57,8 +68,127 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     c = 2 * atan2(sqrt(a), sqrt(1-a))
     return R * c
 
+def send_points_menu(user_id):
+    """ Sends the points menu with two options. """
+    buttons_template = TemplateSendMessage(
+        alt_text="Choose an option",
+        template=ButtonsTemplate(
+            text="🎯 Points & Ranking System\nChoose an option below:",
+            actions=[
+                PostbackAction(label="📊 My Progress", data="check_progress"),
+                PostbackAction(label="🏆 Leaderboard", data="view_leaderboard")
+            ]
+        )
+    )
+    line_bot_api.push_message(user_id, buttons_template)
+
+def calculate_level(points):
+    """ Returns the user's level and how many points are needed for the next level. """
+    level = 1
+    threshold = 50
+
+    while points >= threshold:
+        level += 1
+        if level % 2 == 0:
+            threshold += 50 # increase threshold every 2 levels
+
+    points_to_next_level = threshold - points
+    return level, points_to_next_level
+
+def update_user_points(user_id, points_to_add):
+    """ Updates the user's points and level when they scan a valid QR code. """
+    cursor.execute("SELECT points FROM all_user_points WHERE user_id = ?", (user_id,))
+    result = cursor.fetchone() # A tuple with one value
+
+    if result:
+        new_points = result[0] + points_to_add
+    else:
+        new_points = points_to_add
+
+    # Calculate new level
+    new_level, points_needed = calculate_level(new_points)
+
+    # Update points and level in database
+    cursor.execute("""
+        INSERT INTO all_user_points (user_id, points, level, points_to_next_level)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+        points = ?, level = ?, points_to_next_level = ?
+    """, (user_id, new_points, new_level, points_needed, new_points, new_level, points_needed))
+    conn.commit()
+
+def update_leaderboard():
+    """ Updates the leaderboard ranking for all users. """
+    cursor.execute("SELECT user_id, points FROM all_user_points ORDER BY points DESC")
+    users = cursor.fetchall()
+
+    if not users:
+        return
+    
+    # Assign ranks
+    for rank, (user_id, _) in enumerate(users, start = 1):
+        cursor.execute("UPDATE all_user_points SET ranking = ? WHERE user_id = ?", (rank, user_id))
+
+    conn.commit()
+
+def view_leaderboard(user_id):
+    """ Shows the user's rank and top 3 users. """
+    cursor.execute("SELECT user_id, points, level, ranking FROM all_user_points ORDER BY ranking ASC LIMIT 3")
+    top_users = cursor.fetchall()
+
+    # Get the user's rank
+    cursor.execute("SELECT points, level, ranking FROM all_user_points WHERE user_id = ?", (user_id,))
+    user_data = cursor.fetchone()
+
+    if not user_data:
+        send_line_message(user_id, "You haven't earned any points yet. Start climbing!")
+        return
+    
+    user_points, user_level, user_rank = user_data
+
+    rank_message = f"🏆 {bold_text('Your Ranking')}: #{user_rank}."
+
+    # Get next and previous ranks
+    cursor.execute("SELECT points FROM all_user_points WHERE ranking = ?", (user_rank - 1,))
+    higher_rank_data = cursor.fetchone()
+
+    cursor.execute("SELECT points FROM all_user_points WHERE ranking = ?", (user_rank + 1,))
+    lower_rank_data = cursor.fetchone()
+
+    if higher_rank_data:
+        rank_message += f"⬆️ You need {bold_text(str(higher_rank_data[0] - user_points))} more points to move up to rank {bold_text(f'#{user_rank - 1}')}\n"
+
+    if lower_rank_data:
+        rank_message += f"⬇️ You are {bold_text(str(user_points - lower_rank_data[0]))} points ahead of rank {bold_text(f'#{user_rank + 1}')}\n"
+
+    # Top 3 users
+    top_message = f"{bold_text('Top Climbers')}:\n"
+    medal_emojis = ["🥇", "🥈", "🥉"]
+    for i, (uid, points, level, rank) in enumerate(top_users, start=1):
+        medal = medal_emojis[i - 1] if i <= 3 else "🎖️"  # Use medals for top 3, others get a trophy
+        top_message += f"{medal} {bold_text(f'Rank {rank}')} - Level {level} ({points} points)\n"
+
+    send_line_message(user_id, rank_message + "\n\n" + top_message)
+
+def check_progress(user_id):
+    """ Sends the user's current progress. """
+    cursor.execute("SELECT points, level, points_to_next_level FROM all_user_points WHERE user_id = ?", (user_id,))
+    result = cursor.fetchone()
+
+    if result:
+        user_points, user_level, user_points_to_next_level = result
+        response_message = (
+            f"📊 {bold_text('Your Progress')}:\n"
+            f"You're at {bold_text(f'Level {user_level}')} with {bold_text(f'{user_points} points')}.\n"
+            f"You need {bold_text(f'{user_points_to_next_level} more points')} to reach {bold_text(f'Level {user_level + 1}')}.\n"
+            f"Keep climbing! 🚀"
+        )
+    else:
+        response_message = "You haven't earned any points yet. Start climbing to earn rewards! 🏆"
+    
+    send_line_message(user_id, response_message)
+
 # what should I do when the user first adds the bot? 
-# have to modify!!
 @handler.add(FollowEvent) 
 def handle_follow(event):
     """ When a user adds the bot, ask for GPS location sharing consent. """
@@ -92,30 +222,27 @@ def handle_postback(event):
     user_id = event.source.user_id
     postback_data = event.postback.data
 
-    if postback_data == "agree_location":
-        cursor.execute("UPDATE user_settings SET location_consent = 1 WHERE user_id = ?", (user_id,))
-        conn.commit()
-        send_line_message(user_id, "✅ You have agreed to share your location! QR scans will now verify your GPS position automatically.")
-    elif postback_data == "deny_location":
-        send_line_message(user_id, "🚨 You have denied location sharing. You will be asked again during each QR scan.")
+    # Handle point collection system
+    if postback_data == "check_progress":
+        check_progress(user_id)
+    elif postback_data == "view_leaderboard":
+        update_leaderboard()
+        view_leaderboard(user_id)
 
 # handle messages from users
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    """ 
-    Handles QR code scan messages
-    - Ensures no duplicate scans within 15 seconds
-    - Logs successful scans. 
-    """
+
     try:
         user_message = event.message.text
         user_message_stripped_lower = event.message.text.strip().lower()
         user_id = event.source.user_id
 
+        # handles qrcode scans: ensures no duplicate scans within 15 seconds
         if user_message.startswith("STAIRCASE_QR_"):
             _, _, floor, location = user_message.split("_")
-            print(f"Floor: {floor}")         # Output: 1F
-            print(f"Location: {location}")   # Output: 機械系館_1
+            # print(f"Floor: {floor}")         # Output: 1F
+            # print(f"Location: {location}")   # Output: 機械系館_1
             # print(f"Latitude: {qr_lat}")     # Output: 25.031757
             # print(f"Longitude: {qr_lng}")    # Output: 121.544729
             # qr_lat, qr_lng = float(qr_lat), float(qr_lng)
@@ -134,7 +261,7 @@ def handle_message(event):
                 last_scan_time = datetime.datetime.strptime(last_scan[0], "%Y/%m/%d %H:%M:%S")
                 time_difference = (current_time - last_scan_time).total_seconds()
 
-                if time_difference < 15:
+                if time_difference < 15.000:
                     send_line_message(user_id, "🚫 You must wait at least 15 seconds before scanning again.")
                     return
                 
@@ -145,9 +272,20 @@ def handle_message(event):
             conn.commit()
 
             # Send success message
-            success_message = f"✅ Scan successful!\n📍 Location: {location}\n🏢 Floor: {floor}\n🕒 Time: {timestamp}"
+            success_message = (
+                f"🎉 {bold_text('Great job!')} You've earned {bold_text('+1 point!')}\n"
+                f"📍 {bold_text('Location')}: {location}\n"
+                f"🏢 {bold_text('Floor')}: {floor}\n"
+                f"🕒 {bold_text('Time')}: {timestamp}"
+            )
             send_line_message(user_id, success_message)
+            
+            # Update user_points table
+            update_user_points(user_id, 1)
 
+        # points: user progress, leaderboard
+        if user_message == "points":
+            send_points_menu(user_id)
 
     except Exception as e:
         app.logger.error(f"Error handling message: {e}")
@@ -157,6 +295,7 @@ def request_user_location(user_id, floor, location, qr_lat, qr_lng):
     send_line_message(user_id, "📍 Please share your current location to verify your QR scan.")
     line_bot_api.push_message(user_id, TextSendMessage(text="Tap '+' in the chat and select 'Location'."))
 
+# When user sends location message, contains latitude and longitude
 @handler.add(MessageEvent, message=LocationMessage)
 def handle_location(event):
     """ Handles location messages sent by users and validates against the QR location. """
@@ -185,7 +324,7 @@ def handle_location(event):
                        (user_id, floor, location, user_lat, user_lng, timestamp))
         conn.commit()
 
-        success_message = f"✅ Scan successful!\n📍 Location: {location}\n🏢 Floor: {floor}\n🕒 Time: {timestamp}"
+        success_message = f"🎉 Great job! You've earned +1 point!\n📍 Location: {location}\n🏢 Floor: {floor}\n🕒 Time: {timestamp}"
         send_line_message(user_id, success_message)
 
     except Exception as e:
