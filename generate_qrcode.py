@@ -1,16 +1,25 @@
 import qrcode
+import os
 
-# Replace with your bot's LINE ID
 BOT_ID = "@925keedn"
 
-# List of QR codes with staircase name and floor
-qr_locations = [
-    {"floor": "1F", "location": "機械系館1"},
-    {"floor": "2F", "location": "機械系館1"},
-    {"floor": "3F", "location": "機械系館1"},
-    {"floor": "4F", "location": "機械系館1"},
-    {"floor": "5F", "location": "機械系館1"},
+# Function to generate QR locations dynamically
+def generate_qr_locations(location_name, floors):
+    return [{"floor": f"{i}F", "location": location_name} for i in range(1, floors + 1)]
+
+# List of locations with floors
+target_locations = [
+    ("機械系館1", 5),
+    ("機械系館2", 5)
 ]
+
+# Root directory to store QR codes
+root_folder = "qrcodes"
+
+# Generate QR codes
+qr_locations = []
+for location, floors in target_locations:
+    qr_locations.extend(generate_qr_locations(location, floors))
 
 for qr in qr_locations:
     # Format the message that will be sent to the bot
@@ -19,8 +28,12 @@ for qr in qr_locations:
     # Create a LINE URL scheme that pre-fills the message
     qr_code_url = f"line://oaMessage/{BOT_ID}/?{message}"
 
-    # Generate and save the QR code
-    file_name = f"qr_{qr['floor']}_{qr['location']}.png"
+    # Define folder for each location
+    location_folder = os.path.join(root_folder, qr["location"])
+    os.makedirs(location_folder, exist_ok=True)
+
+    # Generate and save the QR code in the correct folder
+    file_name = os.path.join(location_folder, f"qr_{qr['floor']}.png")
     qrcode.make(qr_code_url).save(file_name)
 
     print(f"✅ QR Code saved: {file_name} → {qr_code_url}")

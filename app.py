@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 import os
 import sqlite3
 import datetime
@@ -9,9 +9,9 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEve
 
 app = Flask(__name__)
 
-# Securely store access token and channel secret
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN", "YOUR_ACCESS_TOKEN_HERE")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "YOUR_CHANNEL_SECRET_HERE")
+BOT_FRIEND_INVITE_URL = "https://line.me/R/ti/p/%40925keedn"
 
 line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
