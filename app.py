@@ -2,7 +2,8 @@ from flask import Flask, request, jsonify, redirect
 import os
 import sqlite3
 import datetime
-# from math import radians, cos, sin, sqrt, atan2
+import requests
+from math import radians, cos, sin, sqrt, atan2
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent, PostbackEvent, PostbackAction, TemplateSendMessage, ButtonsTemplate, LocationMessage
@@ -12,6 +13,8 @@ app = Flask(__name__)
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN", "YOUR_ACCESS_TOKEN_HERE")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "YOUR_CHANNEL_SECRET_HERE")
 BOT_FRIEND_INVITE_URL = "https://line.me/R/ti/p/%40925keedn"
+
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -32,7 +35,7 @@ cursor.execute("""
 """)
 conn.commit() # Saves changes to the database
 
-# Create 
+# Create all_user_points table to store points information
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS all_user_points (
         user_id TEXT PRIMARY KEY,
@@ -40,6 +43,15 @@ cursor.execute("""
         level INTEGER DEFAULT 0,
         points_to_next_level INTEGER DEFAULT 0,
         ranking INTEGER DEFAULT NULL
+    )
+""")
+conn.commit()
+
+# Create user_settings table to store user related info (gps location permission)
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_settings (
+        user_id TEXT PRIMARY KEY,
+        location_consent INTEGER DEFAULT 0
     )
 """)
 conn.commit()
@@ -59,6 +71,18 @@ def send_line_message(user_id, message):
     except Exception as e:
         print(f"🚨 Failed to send LINE message: {e}")
 
+def get_user_location():
+    """ Fetches the user's estimated location from Google's Geolocation API. """
+    url = f"https://www.googleapis.com/geolocation/v1/geolocate?key={GOOGLE_API_KEY}"
+    response = requests.post(url, json={})  # Empty JSON → Google will auto-detect location
+
+    if response.status_code == 200:
+        data = response.json()
+        return data["location"]["lat"], data["location"]["lng"]  # Returns (latitude, longitude)
+    else:
+        print("🚨 Error fetching location:", response.text)
+        return None, None
+
 def calculate_distance(lat1, lon1, lat2, lon2):
     """ Calculates distance between two GPS coordinates in meters. """
     R = 6371000  # Radius of Earth in meters
@@ -67,6 +91,20 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     a = sin(dlat/2) * sin(dlat/2) + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2) * sin(dlon/2)
     c = 2 * atan2(sqrt(a), sqrt(1-a))
     return R * c
+
+def ask_location_permission(user_id):
+    """ Sends a Yes/No button prompt to request location-sharing permission. """
+    buttons_template = TemplateSendMessage(
+        alt_text="📍 Allow location sharing?",
+        template=ButtonsTemplate(
+            text="📍 To validate QR scans, we need access to your location. Do you agree?",
+            actions=[
+                PostbackAction(label="✅ Yes, share location", data="agree_location"),
+                PostbackAction(label="❌ No, ask me again later", data="deny_location")
+            ]
+        )
+    )
+    line_bot_api.push_message(user_id, buttons_template)
 
 def send_points_menu(user_id):
     """ Sends the points menu with two options. """
@@ -146,7 +184,7 @@ def view_leaderboard(user_id):
     
     user_points, user_level, user_rank = user_data
 
-    rank_message = f"🏆 {bold_text('Your Ranking')}: #{user_rank}."
+    rank_message = f"🏆 {bold_text('Your Ranking')}: #{user_rank}.\n"
 
     # Get next and previous ranks
     cursor.execute("SELECT points FROM all_user_points WHERE ranking = ?", (user_rank - 1,))
@@ -168,7 +206,7 @@ def view_leaderboard(user_id):
         medal = medal_emojis[i - 1] if i <= 3 else "🎖️"  # Use medals for top 3, others get a trophy
         top_message += f"{medal} {bold_text(f'Rank {rank}')} - Level {level} ({points} points)\n"
 
-    send_line_message(user_id, rank_message + "\n\n" + top_message)
+    send_line_message(user_id, rank_message + "\n" + top_message)
 
 def check_progress(user_id):
     """ Sends the user's current progress. """
@@ -197,23 +235,11 @@ def handle_follow(event):
     # send welcome message to user :) might need to modify? not sure
     send_line_message(user_id, "Hi {user_id}! Welcome to Staircase Fairy! \n哈囉 {user_id}! 歡迎來到樓梯精靈！")
 
-    # # Store user in the database with default consent = 0 (not agreed yet)
-    # cursor.execute("INSERT OR IGNORE INTO user_settings (user_id, location_consent) VALUES (?, 0)", (user_id,))
-    # conn.commit()
+    # language settings: choose english or chinese
 
-    # # Create Yes/No button template message
-    # buttons_template = TemplateSendMessage(
-    #     alt_text="Would you like to share your location for QR scans?",
-    #     template=ButtonsTemplate(
-    #         text="📍 To track your stair-climbing progress, we need access to your location. Do you agree?",
-    #         actions=[
-    #             PostbackAction(label="Yes", data="agree_location"),
-    #             PostbackAction(label="No", data="deny_location")
-    #         ]
-    #     )
-    # )
-    
-    # line_bot_api.push_message(user_id, buttons_template)
+    # ask for location permission
+    ask_location_permission(user_id)
+
 
 # handle responses from buttons
 @handler.add(PostbackEvent)
@@ -229,10 +255,18 @@ def handle_postback(event):
         update_leaderboard()
         view_leaderboard(user_id)
 
-# handle messages from users
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
+    # Handle location permission
+    if postback_data == "agree_location":
+        cursor.execute("UPDATE user_settings SET location_consent = 1 WHERE user_id = ?", (user_id,))
+        conn.commit()
+        send_line_message(user_id, "✅ You have agreed to share your location!")
+    elif postback_data == "deny_location":
+        send_line_message(user_id, "🚨 You have denied location sharing. We will ask again when needed.")
 
+# handle qrcode scans
+@handler.add(MessageEvent, message=TextMessage)
+def handle_qr_scan(event):
+    
     try:
         user_message = event.message.text
         user_message_stripped_lower = event.message.text.strip().lower()
@@ -241,14 +275,53 @@ def handle_message(event):
         # handles qrcode scans: ensures no duplicate scans within 15 seconds
         if user_message.startswith("STAIRCASE_QR_"):
             _, _, floor, location = user_message.split("_")
-            # print(f"Floor: {floor}")         # Output: 1F
-            # print(f"Location: {location}")   # Output: 機械系館_1
-            # print(f"Latitude: {qr_lat}")     # Output: 25.031757
-            # print(f"Longitude: {qr_lng}")    # Output: 121.544729
-            # qr_lat, qr_lng = float(qr_lat), float(qr_lng)
 
             # Get the current timestamp
             current_time = datetime.datetime.now()
+
+            # Check if the user allowed location tracking
+            cursor.execute("SELECT location_consent FROM user_settings WHERE user_id = ?", (user_id,))
+            consent = cursor.fetchone()
+
+            if not consent or consent[0] == 0:
+                send_line_message(user_id, "🚨 You need to allow location tracking first.")
+                ask_location_permission(user_id) # Ask for permission again
+                return
+            
+            # Fetch the user's location automatically
+            user_lat, user_lng = get_user_location()
+
+            if user_lat is None:
+                send_line_message(user_id, "🚨 Unable to fetch location. Try again later.")
+                return
+            
+            # Predefined QR Code Locations (Example)
+            QR_LOCATIONS = {
+                "1F_機械系館1": (25.0190037, 121.5395211),
+                "2F_機械系館1": (25.0191037, 121.5396211),
+                "3F_機械系館1": (25.0190037, 121.5395211),
+                "4F_機械系館1": (25.0190037, 121.5395211),
+                "5F_機械系館1": (25.0190037, 121.5395211),
+                "1F_機械系館2": (25.0190037, 121.5395211),
+                "2F_機械系館2": (25.0190037, 121.5395211),
+                "3F_機械系館2": (25.0190037, 121.5395211),
+                "4F_機械系館2": (25.0190037, 121.5395211),
+                "5F_機械系館2": (25.0190037, 121.5395211)
+            }
+
+            qr_key = f"{floor}_{location}"
+            if qr_key not in QR_LOCATIONS:
+                send_line_message(user_id, "🚫 Invalid QR Code.")
+                return
+
+            qr_lat, qr_lng = QR_LOCATIONS[qr_key]
+
+            # Check distance
+            distance = calculate_distance(user_lat, user_lng, qr_lat, qr_lng)
+
+            if distance > 50:
+                send_line_message(user_id, "🚫 Scan failed! You are too far from the QR code location.")
+                return
 
             # Check the last scan time for the user
             cursor.execute("""
@@ -264,7 +337,7 @@ def handle_message(event):
                 if time_difference < 15.000:
                     send_line_message(user_id, "🚫 You must wait at least 15 seconds before scanning again.")
                     return
-                
+
             # Log the scan in the database
             timestamp = current_time.strftime("%Y/%m/%d %H:%M:%S")
             cursor.execute("INSERT INTO scan_logs (user_id, floor, location, timestamp) VALUES (?, ?, ?, ?)", 
@@ -282,10 +355,26 @@ def handle_message(event):
             
             # Update user_points table
             update_user_points(user_id, 1)
+    
+    except Exception as e:
+        app.logger.error(f"Error handling message: {e}")
+
+# handle messages from users
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+
+    try:
+        user_message = event.message.text
+        user_message_stripped_lower = event.message.text.strip().lower()
+        user_id = event.source.user_id
 
         # points: user progress, leaderboard
-        if user_message == "points":
+        if user_message_stripped_lower.startswith("points"):
             send_points_menu(user_id)
+
+        # easter eggs
+        if user_message_stripped_lower.startswith("mexico"):
+            send_line_message(user_id, "🇲🇽🌮🌯")
 
     except Exception as e:
         app.logger.error(f"Error handling message: {e}")
