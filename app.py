@@ -99,8 +99,8 @@ def ask_location_permission(user_id):
         template=ButtonsTemplate(
             text="📍 To validate QR scans, we need access to your location. Do you agree?",
             actions=[
-                PostbackAction(label="✅ Yes, share location", data="agree_location"),
-                PostbackAction(label="❌ No, ask me again later", data="deny_location")
+                PostbackAction(label="✅ Yes", data="agree_location"),
+                PostbackAction(label="❌ No", data="deny_location")
             ]
         )
     )
@@ -233,9 +233,11 @@ def handle_follow(event):
     user_id = event.source.user_id
 
     # send welcome message to user :) might need to modify? not sure
-    send_line_message(user_id, "Hi {user_id}! Welcome to Staircase Fairy! \n哈囉 {user_id}! 歡迎來到樓梯精靈！")
+    welcome_message = "Hi {user_id}! Welcome to Staircase Fairy! \n哈囉 {user_id}! 歡迎來到樓梯精靈！"
+    send_line_message(user_id, welcome_message)
 
     # language settings: choose english or chinese
+    
 
     # ask for location permission
     ask_location_permission(user_id)
@@ -257,167 +259,137 @@ def handle_postback(event):
 
     # Handle location permission
     if postback_data == "agree_location":
+        # Ensure the user exists in user_settings before updating
+        cursor.execute("INSERT OR IGNORE INTO user_settings (user_id, location_consent) VALUES (?, 0)", (user_id,))
         cursor.execute("UPDATE user_settings SET location_consent = 1 WHERE user_id = ?", (user_id,))
         conn.commit()
-        send_line_message(user_id, "✅ You have agreed to share your location!")
+        send_line_message(user_id, "✅ Location tracking enabled! Start scanning QR codes!")
     elif postback_data == "deny_location":
-        send_line_message(user_id, "🚨 You have denied location sharing. We will ask again when needed.")
-
-# handle qrcode scans
-@handler.add(MessageEvent, message=TextMessage)
-def handle_qr_scan(event):
-    
-    try:
-        user_message = event.message.text
-        user_message_stripped_lower = event.message.text.strip().lower()
-        user_id = event.source.user_id
-
-        # handles qrcode scans: ensures no duplicate scans within 15 seconds
-        if user_message.startswith("STAIRCASE_QR_"):
-            _, _, floor, location = user_message.split("_")
-
-            # Get the current timestamp
-            current_time = datetime.datetime.now()
-
-            # Check if the user allowed location tracking
-            cursor.execute("SELECT location_consent FROM user_settings WHERE user_id = ?", (user_id,))
-            consent = cursor.fetchone()
-
-            if not consent or consent[0] == 0:
-                send_line_message(user_id, "🚨 You need to allow location tracking first.")
-                ask_location_permission(user_id) # Ask for permission again
-                return
-            
-            # Fetch the user's location automatically
-            user_lat, user_lng = get_user_location()
-
-            if user_lat is None:
-                send_line_message(user_id, "🚨 Unable to fetch location. Try again later.")
-                return
-            
-            # Predefined QR Code Locations (Example)
-            QR_LOCATIONS = {
-                "1F_機械系館1": (25.0190037, 121.5395211),
-                "2F_機械系館1": (25.0191037, 121.5396211),
-                "3F_機械系館1": (25.0190037, 121.5395211),
-                "4F_機械系館1": (25.0190037, 121.5395211),
-                "5F_機械系館1": (25.0190037, 121.5395211),
-                "1F_機械系館2": (25.0190037, 121.5395211),
-                "2F_機械系館2": (25.0190037, 121.5395211),
-                "3F_機械系館2": (25.0190037, 121.5395211),
-                "4F_機械系館2": (25.0190037, 121.5395211),
-                "5F_機械系館2": (25.0190037, 121.5395211)
-            }
-
-            qr_key = f"{floor}_{location}"
-            if qr_key not in QR_LOCATIONS:
-                send_line_message(user_id, "🚫 Invalid QR Code.")
-                return
-
-            qr_lat, qr_lng = QR_LOCATIONS[qr_key]
-
-            # Check distance
-            distance = calculate_distance(user_lat, user_lng, qr_lat, qr_lng)
-
-            if distance > 50:
-                send_line_message(user_id, "🚫 Scan failed! You are too far from the QR code location.")
-                return
-
-            # Check the last scan time for the user
-            cursor.execute("""
-                SELECT timestamp FROM scan_logs WHERE user_id = ? 
-                ORDER BY timestamp DESC LIMIT 1
-            """, (user_id,))
-            last_scan = cursor.fetchone()
-
-            if last_scan:
-                last_scan_time = datetime.datetime.strptime(last_scan[0], "%Y/%m/%d %H:%M:%S")
-                time_difference = (current_time - last_scan_time).total_seconds()
-
-                if time_difference < 15.000:
-                    send_line_message(user_id, "🚫 You must wait at least 15 seconds before scanning again.")
-                    return
-
-            # Log the scan in the database
-            timestamp = current_time.strftime("%Y/%m/%d %H:%M:%S")
-            cursor.execute("INSERT INTO scan_logs (user_id, floor, location, timestamp) VALUES (?, ?, ?, ?)", 
-                           (user_id, floor, location, timestamp))
-            conn.commit()
-
-            # Send success message
-            success_message = (
-                f"🎉 {bold_text('Great job!')} You've earned {bold_text('+1 point!')}\n"
-                f"📍 {bold_text('Location')}: {location}\n"
-                f"🏢 {bold_text('Floor')}: {floor}\n"
-                f"🕒 {bold_text('Time')}: {timestamp}"
-            )
-            send_line_message(user_id, success_message)
-            
-            # Update user_points table
-            update_user_points(user_id, 1)
-    
-    except Exception as e:
-        app.logger.error(f"Error handling message: {e}")
+        cursor.execute("INSERT OR IGNORE INTO user_settings (user_id, location_consent) VALUES (?, 0)", (user_id,))
+        cursor.execute("UPDATE user_settings SET location_consent = 0 WHERE user_id = ?", (user_id,))
+        conn.commit()
+        send_line_message(user_id, "❌ You denied location tracking. QR scan verification will not work.")
 
 # handle messages from users
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-
+    """Handles messages and routes them based on content."""
     try:
         user_message = event.message.text
         user_message_stripped_lower = event.message.text.strip().lower()
         user_id = event.source.user_id
 
-        # points: user progress, leaderboard
+        # If the message is a QR code scan, delegate it to `handle_qr_scan`
+        if user_message.startswith("STAIRCASE_QR_"):
+            handle_qr_scan(user_id, user_message)
+            return
+        
+        # Points: user progress, leaderboard
         if user_message_stripped_lower.startswith("points"):
             send_points_menu(user_id)
 
-        # easter eggs
+        # Easter eggs
         if user_message_stripped_lower.startswith("mexico"):
             send_line_message(user_id, "🇲🇽🌮🌯")
 
     except Exception as e:
         app.logger.error(f"Error handling message: {e}")
 
-def request_user_location(user_id, floor, location, qr_lat, qr_lng):
-    """ Sends a location request to the user inside LINE. """
-    send_line_message(user_id, "📍 Please share your current location to verify your QR scan.")
-    line_bot_api.push_message(user_id, TextSendMessage(text="Tap '+' in the chat and select 'Location'."))
-
-# When user sends location message, contains latitude and longitude
-@handler.add(MessageEvent, message=LocationMessage)
-def handle_location(event):
-    """ Handles location messages sent by users and validates against the QR location. """
+def handle_qr_scan(user_id, user_message):
+    """Handles QR code scan messages."""
     try:
-        user_id = event.source.user_id
-        user_lat = event.message.latitude
-        user_lng = event.message.longitude
+        _, _, floor, location = user_message.split("_")
+        print(floor, location)
 
-        # Retrieve the last scanned QR code location
-        cursor.execute("SELECT floor, location, gps_lat, gps_lng FROM scan_logs WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1", (user_id,))
-        scan_data = cursor.fetchone()
+        # Get the current timestamp
+        current_time = datetime.datetime.now()
 
-        if not scan_data:
-            send_line_message(user_id, "🚫 No QR scan detected. Please scan a QR code first.")
+        # Check if the user allowed location tracking
+        cursor.execute("SELECT location_consent FROM user_settings WHERE user_id = ?", (user_id,))
+        consent = cursor.fetchone()
+
+        if not consent or consent[0] == 0:
+            send_line_message(user_id, "🚨 You need to allow location tracking first.")
+            ask_location_permission(user_id) # Ask for permission again
+            return
+        
+        # Fetch the user's location automatically
+        user_lat, user_lng = get_user_location()
+        print(user_lat, user_lng)
+
+        if user_lat is None:
+            send_line_message(user_id, "🚨 Unable to fetch location. Try again later.")
+            return
+            
+        # Predefined QR Code Locations (Grouped by Location)
+        QR_LOCATIONS = {
+            "機械系館1": {
+                "coordinates": (25.0216448, 121.5463424),
+                "available_floors": [f"{i}F" for i in range(1, 6)]  # Floors 1F to 5F
+            },
+            "機械系館2": {
+                "coordinates": (25.0189335, 121.5392110),
+                "available_floors": [f"{i}F" for i in range(1, 5)]  # Floors 1F to 4F
+            }
+        }
+
+        # Extract location name from QR key
+        location_name = location.replace(f"{floor}_", "")  # Remove floor prefix
+
+        if location_name not in QR_LOCATIONS:
+            send_line_message(user_id, "🚫 Invalid QR Code.")
             return
 
-        floor, location, qr_lat, qr_lng = scan_data
+        # Check if the scanned floor is available for this location
+        if floor not in QR_LOCATIONS[location_name]["available_floors"]:
+            send_line_message(user_id, f"🚫 {floor} is not available for {location_name}.")
+            return
+
+        # Use the same coordinates for all floors in the location
+        qr_lat, qr_lng = QR_LOCATIONS[location_name]["coordinates"]
+
+        # Check distance
         distance = calculate_distance(user_lat, user_lng, qr_lat, qr_lng)
 
-        if distance > 20:
-            send_line_message(user_id, "🚫 You are too far from the QR code location. Scan invalid.")
+        if distance > 50:
+            send_line_message(user_id, "🚫 Scan failed! You are too far from the QR code location.")
             return
 
-        timestamp = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-        cursor.execute("INSERT INTO scan_logs (user_id, floor, location, gps_lat, gps_lng, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                       (user_id, floor, location, user_lat, user_lng, timestamp))
+        # Check the last scan time for the user
+        cursor.execute("""
+            SELECT timestamp FROM scan_logs WHERE user_id = ? 
+            ORDER BY timestamp DESC LIMIT 1
+        """, (user_id,))
+        last_scan = cursor.fetchone()
+
+        if last_scan:
+            last_scan_time = datetime.datetime.strptime(last_scan[0], "%Y/%m/%d %H:%M:%S")
+            time_difference = (current_time - last_scan_time).total_seconds()
+
+            if time_difference < 15.000:
+                send_line_message(user_id, "🚫 You must wait at least 15 seconds before scanning again.")
+                return
+
+        # Log the scan in the database
+        timestamp = current_time.strftime("%Y/%m/%d %H:%M:%S")
+        cursor.execute("INSERT INTO scan_logs (user_id, floor, location, timestamp) VALUES (?, ?, ?, ?)", 
+                        (user_id, floor, location, timestamp))
         conn.commit()
 
-        success_message = f"🎉 Great job! You've earned +1 point!\n📍 Location: {location}\n🏢 Floor: {floor}\n🕒 Time: {timestamp}"
+        # Send success message
+        success_message = (
+            f"🎉 {bold_text('Great job!')} You've earned {bold_text('+1 point!')}\n"
+            f"📍 {bold_text('Location')}: {location}\n"
+            f"🏢 {bold_text('Floor')}: {floor}\n"
+            f"🕒 {bold_text('Time')}: {timestamp}"
+        )
         send_line_message(user_id, success_message)
-
+        
+        # Update user_points table
+        update_user_points(user_id, 1)
+    
     except Exception as e:
-        app.logger.error(f"Error handling location: {e}")
+        app.logger.error(f"Error handling QR scan: {e}")
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
