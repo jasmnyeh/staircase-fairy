@@ -479,6 +479,10 @@ def handle_message(event):
         if user_message.startswith("STAIRCASE_QR_"):
             handle_qr_scan(user_id, user_message)
             return
+
+        # Language settings
+        if user_message.startswith("language"):
+            send_language_menu(user_id)
         
         # Points: user progress, leaderboard
         if user_message_stripped_lower.startswith("points"):
