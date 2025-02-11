@@ -12,7 +12,7 @@ app = Flask(__name__)
 
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN", "YOUR_ACCESS_TOKEN_HERE")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "YOUR_CHANNEL_SECRET_HERE")
-BOT_FRIEND_INVITE_URL = "https://line.me/R/ti/p/%40925keedn"
+# BOT_FRIEND_INVITE_URL = "https://line.me/R/ti/p/%40925keedn"
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
@@ -51,7 +51,8 @@ conn.commit()
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS user_settings (
         user_id TEXT PRIMARY KEY,
-        location_consent INTEGER DEFAULT 0
+        location_consent INTEGER DEFAULT 0,
+        language TEXT DEFAULT 'English'
     )
 """)
 conn.commit()
@@ -64,12 +65,166 @@ def bold_text(text):
     )
     return text.translate(bold_map)
 
-def send_line_message(user_id, message):
-    """ Sends a text message from the LINE bot to the user. """
+def send_line_message(user_id, text_key):
+    """ Sends a text message in the user's preferred language. """
+
+    # Fetch user's language preference
+    user_language = get_user_language(user_id)
+
+    # Get translated message
+    translated_message = get_translated_text(user_id, text_key)
+
     try:
-        line_bot_api.push_message(user_id, TextSendMessage(text=message))
+        line_bot_api.push_message(user_id, TextSendMessage(text=translated_message))
     except Exception as e:
         print(f"🚨 Failed to send LINE message: {e}")
+
+def get_user_language(user_id):
+    """ Retrieves the user's preferred language from the database. Defaults to English. """
+    cursor.execute("SELECT language FROM user_settings WHERE user_id = ?", (user_id,))
+    result = cursor.fetchone()
+    return result[0] if result else "English"  # Default to English
+
+def get_translated_text(user_id, text_key):
+    """ Returns translated text based on user’s preferred language. """
+    language = get_user_language(user_id)
+
+    translations = {
+        "welcome": {
+            "English": "🎉 Welcome to Staircase Fairy!",
+            "Chinese": "🎉 歡迎來到樓梯精靈！"
+        },
+        "choose_language": {
+            "English": "🌍 Choose a language:",
+            "Chinese": "🌍 請選擇語言："
+        },
+        "set_language": {
+            "English": "✅ Language set to {selected_language}!",
+            "Chinese": "✅ 語言已設定成{selected_language}！"
+        },
+        "allow_location": {
+            "English": "📍 Allow location tracking?",
+            "Chinese": "📍 是否允許取用您所在的位置？"
+        },
+        "need_to_allow_location": {
+            "English": "🚨 You need to allow location tracking first.",
+            "Chinese": "🚨 您需要先允許取用位置。"
+        },
+        "cant_fetch_location": {
+            "English": "🚨 Unable to fetch location. Try again later.",
+            "Chinese": "🚨 無法取用位置，稍後再試一次。"
+        },
+        "yes": {
+            "English": "✅ Yes",
+            "Chinese": "✅ 是"
+        },
+        "no": {
+            "English": "❌ No",
+            "Chinese": "❌ 否"
+        },
+        "points_menu": {
+            "English": "🎯 Points & Ranking System\nChoose an option below:",
+            "Chinese": "🎯 積分與排行榜\n請選擇下列選項："
+        },
+        "progress": {
+            "English": "📊 My Progress",
+            "Chinese": "📊 我的進度"
+        },
+        "leaderboard": {
+            "English": "🏆 Leaderboard",
+            "Chinese": "🏆 排行榜"
+        },
+        "no_points_yet": {
+            "English": "You haven't earned any points yet. Start climbing to earn rewards! 🏆",
+            "Chinese": "您目前還沒有點數，速速開始集點吧！🏆"
+        },
+        "location_enabled": {
+            "English": "✅ Location tracking enabled! Start scanning QR codes!",
+            "Chinese": "✅ 允許取用位置，您可以開始掃描QR碼！"
+        },
+        "location_denied": {
+            "English": "❌ You denied location tracking. QR scan verification will not work.",
+            "Chinese": "❌ 不允許取用位置，QR碼將無法運作 :("
+        },
+        "your_ranking": {
+            "English": "🏆 𝗬𝗼𝘂𝗿 𝗥𝗮𝗻𝗸𝗶𝗻𝗴: #{rank}.",
+            "Chinese": "🏆〖您的排名〗：#{rank}。"
+        },
+        "points_needed_to_rank_up": {
+            "English": "⬆️ You need {points_needed} more points to move up to rank #{higher_rank}.",
+            "Chinese": "⬆️ 您還需要 {points_needed} 分，才能升至 #{higher_rank}。"
+        },
+        "points_ahead": {
+            "English": "⬇️ You are {points_ahead} points ahead of rank #{lower_rank}.",
+            "Chinese": "⬇️ 您比 #{lower_rank} 領先 {points_ahead} 分。",
+        },
+        "top_climbers": {
+            "English": "𝗧𝗼𝗽 𝗖𝗹𝗶𝗺𝗯𝗲𝗿𝘀:\n",
+            "Chinese": "〖高手們〗：\n"
+        },
+        "rank_info": {
+            "English": "{medal} Rank {rank} - Level {level} ({points} points)\n",
+            "Chinese": "{medal} 排名 {rank} - 等級 {level}（{points} 分）\n"
+        },
+        "your_progress": {
+            "English": "📊 𝗬𝗼𝘂𝗿 𝗣𝗿𝗼𝗴𝗿𝗲𝘀𝘀:",
+            "Chinese": "📊〖您的進度〗："
+        },
+        "current_level": {
+            "English": "You're at {bold_level} with {bold_points}.",
+            "Chinese": "您目前處於 {bold_level}，擁有 {bold_points}。"
+        },
+        "points_needed": {
+            "English": "You need {bold_needed_points} to reach {bold_next_level}.",
+            "Chinese": "您還需要 {bold_needed_points}，才能達到 {bold_next_level}。"
+        },
+        "keep_climbing": {
+            "English": "Keep climbing! 🚀",
+            "Chinese": "繼續努力爬樓梯吧！🚀"
+        },
+        "invalid_qrcode": {
+            "English": "🚫 Invalid QR Code.",
+            "Chinese": "🚫 無效的QR碼。"
+        },
+        "floor_unavailable": {
+            "English": "🚫 {floor} is not available for {location_name}.",
+            "Chinese": "🚫 {location_name}沒有{floor}。"
+        },
+        "too_far_away": {
+            "English": "🚫 Scan failed! You are too far from the QR code location.",
+            "Chinese": "🚫 掃描無效，您距離QR碼太遠了。"
+        },
+        "wait_longer": {
+            "English": "🚫 You must wait at least 15 seconds before scanning again.",
+            "Chinese": "🚫 您需要等待至少15秒才能掃描下一個QR碼。"
+        },
+        "scan_success": {
+            "English": "🎉 Great job! You've earned +{point} point!\n"
+                        "📍 𝗟𝗼𝗰𝗮𝘁𝗶𝗼𝗻: {location}\n"
+                        "🏢 𝗙𝗹𝗼𝗼𝗿: {floor}\n"
+                        "🕒 𝗧𝗶𝗺𝗲: {timestamp}",
+            "Chinese": "🎉 太棒哩！恭喜你成功獲得 {point} 點！\n"
+                        "📍〖位置〗：{location}\n"
+                        "🏢〖樓層〗：{floor}\n"
+                        "🕒〖時間〗：{timestamp}"
+        }
+    }
+
+    return translations.get(text_key, {}).get(language, text_key)  # Default to English
+
+def send_language_menu(user_id):
+    """ Sends a menu allowing the user to choose their preferred language. """
+    buttons_template = TemplateSendMessage(
+        alt_text=get_translated_text(user_id, "choose_language"),
+        template=ButtonsTemplate(
+            text=get_translated_text(user_id, "choose_language"),
+            actions=[
+                PostbackAction(label="English", data="language_English"),
+                PostbackAction(label="繁體中文", data="language_Chinese")
+            ]
+        )
+    )
+    line_bot_api.push_message(user_id, buttons_template)
 
 def get_user_location():
     """ Fetches the user's estimated location from Google's Geolocation API. """
@@ -95,12 +250,12 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 def ask_location_permission(user_id):
     """ Sends a Yes/No button prompt to request location-sharing permission. """
     buttons_template = TemplateSendMessage(
-        alt_text="📍 Allow location sharing?",
+        alt_text=get_translated_text(user_id, "allow_location"),
         template=ButtonsTemplate(
-            text="📍 To validate QR scans, we need access to your location. Do you agree?",
+            text=get_translated_text(user_id, "allow_location"),
             actions=[
-                PostbackAction(label="✅ Yes", data="agree_location"),
-                PostbackAction(label="❌ No", data="deny_location")
+                PostbackAction(label=get_translated_text(user_id, "yes"), data="agree_location"),
+                PostbackAction(label=get_translated_text(user_id, "no"), data="deny_location")
             ]
         )
     )
@@ -109,12 +264,12 @@ def ask_location_permission(user_id):
 def send_points_menu(user_id):
     """ Sends the points menu with two options. """
     buttons_template = TemplateSendMessage(
-        alt_text="Choose an option",
+        alt_text=get_translated_text(user_id, "points_menu"),
         template=ButtonsTemplate(
-            text="🎯 Points & Ranking System\nChoose an option below:",
+            text=get_translated_text(user_id, "points_menu"),
             actions=[
-                PostbackAction(label="📊 My Progress", data="check_progress"),
-                PostbackAction(label="🏆 Leaderboard", data="view_leaderboard")
+                PostbackAction(label=get_translated_text(user_id, "progress"), data="check_progress"),
+                PostbackAction(label=get_translated_text(user_id, "leaderboard"), data="view_leaderboard")
             ]
         )
     )
@@ -179,12 +334,13 @@ def view_leaderboard(user_id):
     user_data = cursor.fetchone()
 
     if not user_data:
-        send_line_message(user_id, "You haven't earned any points yet. Start climbing!")
+        send_line_message(user_id, "no_points_yet")
         return
     
     user_points, user_level, user_rank = user_data
 
-    rank_message = f"🏆 {bold_text('Your Ranking')}: #{user_rank}.\n"
+    # Rank message
+    rank_message = get_translated_text(user_id, "your_ranking").format(rank=user_rank)
 
     # Get next and previous ranks
     cursor.execute("SELECT points FROM all_user_points WHERE ranking = ?", (user_rank - 1,))
@@ -194,17 +350,29 @@ def view_leaderboard(user_id):
     lower_rank_data = cursor.fetchone()
 
     if higher_rank_data:
-        rank_message += f"⬆️ You need {bold_text(str(higher_rank_data[0] - user_points))} more points to move up to rank {bold_text(f'#{user_rank - 1}')}\n"
+        rank_message += get_translated_text(user_id, "points_needed_to_rank_up").format(
+            points_needed=bold_text(str(higher_rank_data[0] - user_points)),
+            higher_rank=bold_text(f"#{user_rank - 1}")
+        ) + "\n"
 
     if lower_rank_data:
-        rank_message += f"⬇️ You are {bold_text(str(user_points - lower_rank_data[0]))} points ahead of rank {bold_text(f'#{user_rank + 1}')}\n"
+        rank_message += get_translated_text(user_id, "points_ahead").format(
+            points_ahead=bold_text(str(user_points - lower_rank_data[0])),
+            lower_rank=bold_text(f"#{user_rank + 1}")
+        ) + "\n"
 
     # Top 3 users
-    top_message = f"{bold_text('Top Climbers')}:\n"
+    top_message = get_translated_text(user_id, "top_climbers")
+
     medal_emojis = ["🥇", "🥈", "🥉"]
     for i, (uid, points, level, rank) in enumerate(top_users, start=1):
         medal = medal_emojis[i - 1] if i <= 3 else "🎖️"  # Use medals for top 3, others get a trophy
-        top_message += f"{medal} {bold_text(f'Rank {rank}')} - Level {level} ({points} points)\n"
+        top_message += get_translated_text(user_id, "rank_info").format(
+            medal=medal,
+            rank=rank,
+            level=level,
+            points=points
+        )
 
     send_line_message(user_id, rank_message + "\n" + top_message)
 
@@ -215,33 +383,54 @@ def check_progress(user_id):
 
     if result:
         user_points, user_level, user_points_to_next_level = result
-        response_message = (
-            f"📊 {bold_text('Your Progress')}:\n"
-            f"You're at {bold_text(f'Level {user_level}')} with {bold_text(f'{user_points} points')}.\n"
-            f"You need {bold_text(f'{user_points_to_next_level} more points')} to reach {bold_text(f'Level {user_level + 1}')}.\n"
-            f"Keep climbing! 🚀"
+        # Get translated messages
+        progress_header = get_translated_text(user_id, "your_progress")
+        current_level_msg = get_translated_text(user_id, "current_level").format(
+            bold_level=bold_text(f"Level {user_level}"),
+            bold_points=bold_text(f"{user_points} points")
         )
+        points_needed_msg = get_translated_text(user_id, "points_needed").format(
+            bold_needed_points=bold_text(f"{user_points_to_next_level} more points"),
+            bold_next_level=bold_text(f"Level {user_level + 1}")
+        )
+        keep_climbing_msg = get_translated_text(user_id, "keep_climbing")
+
+        response_message = f"{progress_header}\n{current_level_msg}\n{points_needed_msg}\n{keep_climbing_msg}"
+
     else:
-        response_message = "You haven't earned any points yet. Start climbing to earn rewards! 🏆"
+        response_message = "no_points_yet"
     
     send_line_message(user_id, response_message)
 
 # what should I do when the user first adds the bot? 
 @handler.add(FollowEvent) 
 def handle_follow(event):
-    """ When a user adds the bot, ask for GPS location sharing consent. """
+    """ When a user adds the bot, send a personalized welcome message and ask for language preference and location permission"""
     user_id = event.source.user_id
 
-    # send welcome message to user :) might need to modify? not sure
-    welcome_message = "Hi {user_id}! Welcome to Staircase Fairy! \n哈囉 {user_id}! 歡迎來到樓梯精靈！"
-    send_line_message(user_id, welcome_message)
+    try:
+        # Fetch user's display name from LINE profile
+        profile = line_bot_api.get_profile(user_id)
+        user_name = profile.display_name  # Extract the user's name
 
-    # language settings: choose english or chinese
-    
+        # Send a personalized welcome message
+        welcome_message = f"Hi {user_name}! 🎉 Welcome to Staircase Fairy!\n"
+        welcome_message += f"哈囉 {user_name}！歡迎來到樓梯精靈！🏃‍♂️🏃‍♀️"
 
-    # ask for location permission
-    ask_location_permission(user_id)
+        line_bot_api.push_message(user_id, TextSendMessage(text=welcome_message))
 
+        # language settings: choose english or chinese
+        send_language_menu(user_id)
+
+        # Ask for location permission
+        ask_location_permission(user_id)
+
+    except Exception as e:
+        app.logger.error(f"Error fetching user profile: {e}")
+        # Fallback if unable to fetch name
+        line_bot_api.push_message(user_id, TextSendMessage(text="Hi! 🎉 Welcome to Staircase Fairy!\n哈囉！歡迎來到樓梯精靈！🏃‍♂️🏃‍♀️"))
+        send_language_menu(user_id)
+        ask_location_permission(user_id)
 
 # handle responses from buttons
 @handler.add(PostbackEvent)
@@ -250,25 +439,32 @@ def handle_postback(event):
     user_id = event.source.user_id
     postback_data = event.postback.data
 
+    if postback_data.startswith("language_"):
+        selected_language = postback_data.split("_")[1]
+        cursor.execute("INSERT OR REPLACE INTO user_settings (user_id, language) VALUES (?, ?)", (user_id, selected_language))
+        conn.commit()
+        response_message = get_translated_text(user_id, "set_language").format(selected_language=selected_language)
+        send_line_message(user_id, response_message)
+
     # Handle point collection system
-    if postback_data == "check_progress":
+    elif postback_data == "check_progress":
         check_progress(user_id)
     elif postback_data == "view_leaderboard":
         update_leaderboard()
         view_leaderboard(user_id)
 
     # Handle location permission
-    if postback_data == "agree_location":
+    elif postback_data == "agree_location":
         # Ensure the user exists in user_settings before updating
         cursor.execute("INSERT OR IGNORE INTO user_settings (user_id, location_consent) VALUES (?, 0)", (user_id,))
         cursor.execute("UPDATE user_settings SET location_consent = 1 WHERE user_id = ?", (user_id,))
         conn.commit()
-        send_line_message(user_id, "✅ Location tracking enabled! Start scanning QR codes!")
+        send_line_message(user_id, "location_enabled")
     elif postback_data == "deny_location":
         cursor.execute("INSERT OR IGNORE INTO user_settings (user_id, location_consent) VALUES (?, 0)", (user_id,))
         cursor.execute("UPDATE user_settings SET location_consent = 0 WHERE user_id = ?", (user_id,))
         conn.commit()
-        send_line_message(user_id, "❌ You denied location tracking. QR scan verification will not work.")
+        send_line_message(user_id, "location_denied")
 
 # handle messages from users
 @handler.add(MessageEvent, message=TextMessage)
@@ -309,7 +505,7 @@ def handle_qr_scan(user_id, user_message):
         consent = cursor.fetchone()
 
         if not consent or consent[0] == 0:
-            send_line_message(user_id, "🚨 You need to allow location tracking first.")
+            send_line_message(user_id, "need_to_allow_location")
             ask_location_permission(user_id) # Ask for permission again
             return
         
@@ -318,7 +514,7 @@ def handle_qr_scan(user_id, user_message):
         print(user_lat, user_lng)
 
         if user_lat is None:
-            send_line_message(user_id, "🚨 Unable to fetch location. Try again later.")
+            send_line_message(user_id, "cant_fetch_location")
             return
             
         # Predefined QR Code Locations (Grouped by Location)
@@ -333,26 +529,27 @@ def handle_qr_scan(user_id, user_message):
             }
         }
 
-        # Extract location name from QR key
-        location_name = location.replace(f"{floor}_", "")  # Remove floor prefix
-
-        if location_name not in QR_LOCATIONS:
-            send_line_message(user_id, "🚫 Invalid QR Code.")
+        if location not in QR_LOCATIONS:
+            send_line_message(user_id, "invalid_qrcode")
             return
 
         # Check if the scanned floor is available for this location
-        if floor not in QR_LOCATIONS[location_name]["available_floors"]:
-            send_line_message(user_id, f"🚫 {floor} is not available for {location_name}.")
+        if floor not in QR_LOCATIONS[location]["available_floors"]:
+            response_message = get_translated_text(user_id, "floor_unavailable").format(
+                location_name=location,
+                floor=floor
+            )
+            send_line_message(user_id, response_message)
             return
 
         # Use the same coordinates for all floors in the location
-        qr_lat, qr_lng = QR_LOCATIONS[location_name]["coordinates"]
+        qr_lat, qr_lng = QR_LOCATIONS[location]["coordinates"]
 
         # Check distance
         distance = calculate_distance(user_lat, user_lng, qr_lat, qr_lng)
 
         if distance > 50:
-            send_line_message(user_id, "🚫 Scan failed! You are too far from the QR code location.")
+            send_line_message(user_id, "too_far_away")
             return
 
         # Check the last scan time for the user
@@ -367,7 +564,7 @@ def handle_qr_scan(user_id, user_message):
             time_difference = (current_time - last_scan_time).total_seconds()
 
             if time_difference < 15.000:
-                send_line_message(user_id, "🚫 You must wait at least 15 seconds before scanning again.")
+                send_line_message(user_id, "wait_longer")
                 return
 
         # Log the scan in the database
@@ -377,11 +574,11 @@ def handle_qr_scan(user_id, user_message):
         conn.commit()
 
         # Send success message
-        success_message = (
-            f"🎉 {bold_text('Great job!')} You've earned {bold_text('+1 point!')}\n"
-            f"📍 {bold_text('Location')}: {location}\n"
-            f"🏢 {bold_text('Floor')}: {floor}\n"
-            f"🕒 {bold_text('Time')}: {timestamp}"
+        success_message = get_translated_text(user_id, "scan_success").format(
+            point=1,
+            location=location,
+            floor=floor,
+            timestamp=timestamp
         )
         send_line_message(user_id, success_message)
         
