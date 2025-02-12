@@ -259,6 +259,22 @@ def get_translated_text(user_id, text_key):
         "issue_received": {
             "English": "Thank you for your feedback! We appreciate your input and will review your message as soon as possible. 🚀",
             "Chinese": "謝謝您的回覆！我們將會儘速查看您的訊息 🚀"
+        },
+        "how_to_play": {
+            "English": "🏆 𝗛𝗼𝘄 𝘁𝗼 𝗣𝗹𝗮𝘆 𝗦𝘁𝗮𝗶𝗿𝗰𝗮𝘀𝗲 𝗙𝗮𝗶𝗿𝘆! 🏆\n\n"
+                        "✨ 𝗦𝗰𝗮𝗻 𝗘𝗮𝗰𝗵 𝗙𝗹𝗼𝗼𝗿\n"
+                        "Scan the 𝗤𝗥 𝗰𝗼𝗱𝗲 on every floor as you climb! This logs your progress and helps you earn points.\n\n"
+                        "🚀 𝗖𝗹𝗶𝗺𝗯 & 𝗖𝗼𝗺𝗽𝗲𝘁𝗲\n"
+                        "The more you climb, the more points you collect! Check the 𝗹𝗲𝗮𝗱𝗲𝗿𝗯𝗼𝗮𝗿𝗱 to see how you rank among other players.\n\n"
+                        "🎉 𝗪𝗶𝗻 & 𝗖𝗲𝗹𝗲𝗯𝗿𝗮𝘁𝗲\n"
+                        "Climb to the 𝘁𝗼𝗽 𝗼𝗳 𝘁𝗵𝗲 𝗹𝗲𝗮𝗱𝗲𝗿𝗯𝗼𝗮𝗿𝗱 and unlock 𝗲𝘅𝗰𝗹𝘂𝘀𝗶𝘃𝗲 𝗿𝗲𝘄𝗮𝗿𝗱𝘀 every month! Keep going and challenge yourself! 🚀",
+            "Chinese": "🏆 遊戲玩法 🏆\n\n"
+                        "✨【每層掃一次】\n"
+                        "每爬一層樓，記得掃描貼在樓梯間的QR碼，即可獲得一點！\n\n"
+                        "🚀【挑戰排行榜】\n"
+                        "爬越多層樓梯，累積越多點數，衝上排行榜！\n\n"
+                        "🎉【贏得獎勵】\n"
+                        "站上排行榜頂端，解鎖每月限定的專屬獎勵！快來加入挑戰吧！🚀"
         }
     }
 
@@ -498,6 +514,9 @@ def handle_follow(event):
         # language settings: choose english or chinese
         send_language_menu(user_id)
 
+        # send users how to play this game
+        send_line_message(user_id, get_translated_text(user_id, "how_to_play"))
+
         # Ask for location permission
         ask_location_permission(user_id)
 
@@ -556,16 +575,20 @@ def handle_message(event):
             handle_qr_scan(user_id, user_message)
             return
 
+        # How to play
+        if user_message_stripped_lower.startswith("how to play"):
+            send_line_message(user_id, "how_to_play")
+
         # Language settings
         if user_message_stripped_lower.startswith("language"):
-            send_language_menu(user_id)
+            send_language_menu(user_id, get_translated_text(user_id, "how_to_play"))
         
         # Points: user progress, leaderboard
         if user_message_stripped_lower.startswith("points"):
             send_points_menu(user_id)
 
         # Issue reports
-        if user_message_stripped_lower.startswith("issue report"):
+        if user_message_stripped_lower.startswith("feedback"):
             issue_feedback(user_id)
 
         if user_message.startswith("I would like to provide feedback or report an issue:") or user_message.startswith("我想提供回饋或回報問題："):
@@ -692,20 +715,25 @@ def handle_sticker(event):
 @app.route("/webhook", methods=["POST"])
 def webhook():
     """Handles incoming messages from LINE users."""
-    signature = request.headers.get('X-Line-Signature')
-    body = request.get_data(as_text=True)
-    app.logger.info("📌 Request body: " + body)
+    signature = request.headers.get('X-Line-Signature')  # 🔹 Fetch LINE Signature
+    body = request.get_data(as_text=True) or "{}"  # 🔹 Ensure body isn't None
+
+    if not signature:  # 🔹 Handle missing header
+        app.logger.error("🚨 Missing X-Line-Signature header.")
+        return jsonify({"error": "Missing X-Line-Signature header"}), 400
+
+    app.logger.info(f"📌 Request body: {body}")
 
     try:
-        handler.handle(body, signature)
+        handler.handle(body, signature)  # ✅ Process the request
     except InvalidSignatureError:
-        app.logger.error("🚨 Invalid signature. Check your channel secret.")
+        app.logger.error("🚨 Invalid signature. Check your LINE channel secret.")
         return jsonify({"error": "Invalid signature"}), 400
     except Exception as e:
         app.logger.error(f"🚨 Error: {e}")
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({"status": 200})
+    return jsonify({"status": "ok"}), 200  # ✅ Always return 200 OK
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=True)
