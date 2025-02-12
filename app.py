@@ -4,10 +4,11 @@ import sqlite3
 import datetime
 import requests
 import urllib.parse
+import random
 from math import radians, cos, sin, sqrt, atan2
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent, PostbackEvent, PostbackAction, TemplateSendMessage, ButtonsTemplate, LocationMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent, PostbackEvent, PostbackAction, TemplateSendMessage, ButtonsTemplate, LocationMessage, StickerMessage
 
 app = Flask(__name__)
 
@@ -68,6 +69,33 @@ cursor.execute("""
     )
 """)
 conn.commit()
+
+# Define some random responses
+STICKER_RESPONSES = [
+    "You got taste!",
+    "😎",
+    "Are you reading my mind???",
+    "G'day mate!",
+    ":D :P :O :3",
+    "Fun fact: The fear of long words is called Hippopotomonstrosesquippedaliophobia.",
+    "Fun fact: Snails have teeth",
+    "Fun fact: One in 18 people have a third nipple.",
+    "Fun fact: You travel 2.5 million km a day around the Sun without realising.",
+    "Fun fact: Your brain burns 400-500 calories a day.",
+    "Fun fact: A cloud weighs around a million tonnes.",
+    "Wait ✋ They don't love you like I love you 💃🕺",
+    "😬",
+    "💍?",
+    "🤜",
+    "🤠",
+    "I'm bored talk to me",
+    "Nani?!?!??!",
+    "What should I have for lunch 🤨",
+    "lalalalalalalala",
+    "I'm so done with you",
+    "Love ya! <3",
+    "live, love, laugh 😀✨"
+]
 
 def bold_text(text):
     """ Converts text to fullwidth bold Unicode characters. """
@@ -450,7 +478,7 @@ def save_report(user_id, report_text):
                    (user_id, report_text, timestamp))
     conn.commit()
 
-# what should I do when the user first adds the bot? 
+# when user first adds the bot
 @handler.add(FollowEvent) 
 def handle_follow(event):
     """ When a user adds the bot, send a personalized welcome message and ask for language preference and location permission"""
@@ -649,6 +677,17 @@ def handle_qr_scan(user_id, user_message):
     
     except Exception as e:
         app.logger.error(f"Error handling QR scan: {e}")
+
+@handler.add(MessageEvent, message=StickerMessage)
+def handle_sticker(event):
+    """Handles sticker messages by replying with a random response."""
+    user_id = event.source.user_id
+
+    # Select a random response
+    random_reply = random.choice(STICKER_RESPONSES)
+
+    # Send the response
+    send_line_message(user_id, random_reply)
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
