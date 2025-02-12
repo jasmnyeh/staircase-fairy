@@ -3,6 +3,7 @@ import os
 import sqlite3
 import datetime
 import requests
+import urllib.parse
 from math import radians, cos, sin, sqrt, atan2
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -12,7 +13,7 @@ app = Flask(__name__)
 
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN", "YOUR_ACCESS_TOKEN_HERE")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "YOUR_CHANNEL_SECRET_HERE")
-# BOT_FRIEND_INVITE_URL = "https://line.me/R/ti/p/%40925keedn"
+BOT_ID = "@925keedn"
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
@@ -53,6 +54,17 @@ cursor.execute("""
         user_id TEXT PRIMARY KEY,
         location_consent INTEGER DEFAULT 0,
         language TEXT DEFAULT 'English'
+    )
+""")
+conn.commit()
+
+# Create table for feedback
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS feedback (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        report TEXT,
+        timestamp TEXT
     )
 """)
 conn.commit()
@@ -207,6 +219,18 @@ def get_translated_text(user_id, text_key):
                         "📍【位置】：{location}\n"
                         "🏢【樓層】：{floor}\n"
                         "🕒【時間】：{timestamp}"
+        },
+        "issue_feedback": {
+            "English": "I would like to provide feedback or report an issue:\n",
+            "Chinese": "我想提供回饋或回報問題：\n"
+        },
+        "report_url": {
+            "English": "💬 Have feedback or an issue? Tell us here: {line_url}",
+            "Chinese": "💬 歡迎在這裡分享您的想法或回報遇到的問題！：{line_url}"
+        },
+        "issue_received": {
+            "English": "Thank you for your feedback! We appreciate your input and will review your message as soon as possible. 🚀",
+            "Chinese": "謝謝您的回覆！我們將會儘速查看您的訊息 🚀"
         }
     }
 
@@ -402,6 +426,30 @@ def check_progress(user_id):
     
     send_line_message(user_id, response_message)
 
+def issue_feedback(user_id):
+    """ Sends a pre-filled text to the user for reporting an issue. """
+
+    # Predefined messages
+    prefilled_text = get_translated_text(user_id, "issue_feedback")
+
+    # URL-encode the message to replace spaces and special characters
+    encoded_text = urllib.parse.quote(prefilled_text)
+
+    # Generate a LINE URL scheme that pre-fills the message
+    line_url = f"line://oaMessage/{BOT_ID}/?{encoded_text}"
+
+    # Send the URL to the user so they can click and open a pre-filled text box
+    response_message = get_translated_text(user_id, "report_url").format(line_url=line_url)
+    send_line_message(user_id, response_message)
+
+def save_report(user_id, report_text):
+    """ Saves a user’s reported issue/feedback to the database. """
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor.execute("INSERT INTO feedback (user_id, report, timestamp) VALUES (?, ?, ?)", 
+                   (user_id, report_text, timestamp))
+    conn.commit()
+
 # what should I do when the user first adds the bot? 
 @handler.add(FollowEvent) 
 def handle_follow(event):
@@ -481,12 +529,22 @@ def handle_message(event):
             return
 
         # Language settings
-        if user_message.startswith("language"):
+        if user_message_stripped_lower.startswith("language"):
             send_language_menu(user_id)
         
         # Points: user progress, leaderboard
         if user_message_stripped_lower.startswith("points"):
             send_points_menu(user_id)
+
+        # Issue reports
+        if user_message_stripped_lower.startswith("issue report"):
+            issue_feedback(user_id)
+
+        if user_message.startswith("I would like to provide feedback or report an issue:") or user_message.startswith("我想提供回饋或回報問題："):
+            report_text = user_message.split("\n", 1)[1]  # Extract the actual report content
+            save_report(user_id, report_text)  # Save it in the database
+            send_line_message(user_id, get_translated_text(user_id, "issue_received"))
+            return
 
         # Easter eggs
         if user_message_stripped_lower.startswith("mexico"):
