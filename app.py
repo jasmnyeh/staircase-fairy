@@ -99,8 +99,8 @@ def get_translated_text(user_id, text_key):
             "Chinese": "🌍 請選擇語言："
         },
         "set_language": {
-            "English": "✅ Language set to {selected_language}!",
-            "Chinese": "✅ 語言已設定成{selected_language}！"
+            "English": "✅ Language set to English!",
+            "Chinese": "✅ 語言已設定成繁體中文！"
         },
         "allow_location": {
             "English": "📍 Allow location tracking?",
@@ -148,35 +148,35 @@ def get_translated_text(user_id, text_key):
         },
         "your_ranking": {
             "English": "🏆 𝗬𝗼𝘂𝗿 𝗥𝗮𝗻𝗸𝗶𝗻𝗴: #{rank}.",
-            "Chinese": "🏆〖您的排名〗：#{rank}。"
+            "Chinese": "🏆【您的排名】：#{rank}。"
         },
         "points_needed_to_rank_up": {
-            "English": "⬆️ You need {points_needed} more points to move up to rank #{higher_rank}.",
-            "Chinese": "⬆️ 您還需要 {points_needed} 分，才能升至 #{higher_rank}。"
+            "English": "⬆️ You need {points_needed} more points to move up to rank {higher_rank}.",
+            "Chinese": "⬆️ 您還需要 {points_needed} 點才能升至 {higher_rank}。"
         },
         "points_ahead": {
-            "English": "⬇️ You are {points_ahead} points ahead of rank #{lower_rank}.",
-            "Chinese": "⬇️ 您比 #{lower_rank} 領先 {points_ahead} 分。",
+            "English": "⬇️ You are {points_ahead} points ahead of rank {lower_rank}.",
+            "Chinese": "⬇️ 您比 {lower_rank} 領先 {points_ahead} 點。",
         },
         "top_climbers": {
             "English": "𝗧𝗼𝗽 𝗖𝗹𝗶𝗺𝗯𝗲𝗿𝘀:\n",
-            "Chinese": "〖高手們〗：\n"
+            "Chinese": "【高手們】：\n"
         },
         "rank_info": {
-            "English": "{medal} Rank {rank} - Level {level} ({points} points)\n",
-            "Chinese": "{medal} 排名 {rank} - 等級 {level}（{points} 分）\n"
+            "English": "{medal} Rank {rank} - {points} points (Level {level})\n",
+            "Chinese": "{medal} 排名 {rank} - {points} 點（等級 {level}）\n"
         },
         "your_progress": {
             "English": "📊 𝗬𝗼𝘂𝗿 𝗣𝗿𝗼𝗴𝗿𝗲𝘀𝘀:",
-            "Chinese": "📊〖您的進度〗："
+            "Chinese": "📊【您的進度】："
         },
         "current_level": {
-            "English": "You're at {bold_level} with {bold_points}.",
-            "Chinese": "您目前處於 {bold_level}，擁有 {bold_points}。"
+            "English": "You're at 𝗟𝗲𝘃𝗲𝗹 {bold_level} with {bold_points} 𝗽𝗼𝗶𝗻𝘁𝘀.",
+            "Chinese": "您目前處於等級 {bold_level}，擁有 {bold_points} 點。"
         },
         "points_needed": {
-            "English": "You need {bold_needed_points} to reach {bold_next_level}.",
-            "Chinese": "您還需要 {bold_needed_points}，才能達到 {bold_next_level}。"
+            "English": "You need {bold_needed_points} 𝗺𝗼𝗿𝗲 𝗽𝗼𝗶𝗻𝘁𝘀 to reach 𝗟𝗲𝘃𝗲𝗹 {bold_next_level}.",
+            "Chinese": "您還需要 {bold_needed_points} 點，才能達到等級 {bold_next_level}。"
         },
         "keep_climbing": {
             "English": "Keep climbing! 🚀",
@@ -204,9 +204,9 @@ def get_translated_text(user_id, text_key):
                         "🏢 𝗙𝗹𝗼𝗼𝗿: {floor}\n"
                         "🕒 𝗧𝗶𝗺𝗲: {timestamp}",
             "Chinese": "🎉 太棒哩！恭喜你成功獲得 {point} 點！\n"
-                        "📍〖位置〗：{location}\n"
-                        "🏢〖樓層〗：{floor}\n"
-                        "🕒〖時間〗：{timestamp}"
+                        "📍【位置】：{location}\n"
+                        "🏢【樓層】：{floor}\n"
+                        "🕒【時間】：{timestamp}"
         }
     }
 
@@ -340,7 +340,7 @@ def view_leaderboard(user_id):
     user_points, user_level, user_rank = user_data
 
     # Rank message
-    rank_message = get_translated_text(user_id, "your_ranking").format(rank=user_rank)
+    rank_message = get_translated_text(user_id, "your_ranking").format(rank=bold_text(str(user_rank)))
 
     # Get next and previous ranks
     cursor.execute("SELECT points FROM all_user_points WHERE ranking = ?", (user_rank - 1,))
@@ -350,7 +350,7 @@ def view_leaderboard(user_id):
     lower_rank_data = cursor.fetchone()
 
     if higher_rank_data:
-        rank_message += get_translated_text(user_id, "points_needed_to_rank_up").format(
+        rank_message += "\n" + get_translated_text(user_id, "points_needed_to_rank_up").format(
             points_needed=bold_text(str(higher_rank_data[0] - user_points)),
             higher_rank=bold_text(f"#{user_rank - 1}")
         ) + "\n"
@@ -386,12 +386,12 @@ def check_progress(user_id):
         # Get translated messages
         progress_header = get_translated_text(user_id, "your_progress")
         current_level_msg = get_translated_text(user_id, "current_level").format(
-            bold_level=bold_text(f"Level {user_level}"),
-            bold_points=bold_text(f"{user_points} points")
+            bold_level=bold_text(f"{user_level}"),
+            bold_points=bold_text(f"{user_points}")
         )
         points_needed_msg = get_translated_text(user_id, "points_needed").format(
-            bold_needed_points=bold_text(f"{user_points_to_next_level} more points"),
-            bold_next_level=bold_text(f"Level {user_level + 1}")
+            bold_needed_points=bold_text(f"{user_points_to_next_level}"),
+            bold_next_level=bold_text(f"{user_level + 1}")
         )
         keep_climbing_msg = get_translated_text(user_id, "keep_climbing")
 
@@ -443,7 +443,7 @@ def handle_postback(event):
         selected_language = postback_data.split("_")[1]
         cursor.execute("INSERT OR REPLACE INTO user_settings (user_id, language) VALUES (?, ?)", (user_id, selected_language))
         conn.commit()
-        response_message = get_translated_text(user_id, "set_language").format(selected_language=selected_language)
+        response_message = get_translated_text(user_id, "set_language")
         send_line_message(user_id, response_message)
 
     # Handle point collection system
