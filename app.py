@@ -5,10 +5,13 @@ import datetime
 import requests
 import urllib.parse
 import random
+# import pymysql
 from math import radians, cos, sin, sqrt, atan2
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent, PostbackEvent, PostbackAction, TemplateSendMessage, ButtonsTemplate, LocationMessage, StickerMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent, PostbackEvent, PostbackAction, TemplateSendMessage, ButtonsTemplate, LocationMessage, StickerMessage, CarouselTemplate, CarouselColumn, URITemplateAction
+import logging
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
@@ -199,8 +202,8 @@ def get_translated_text(user_id, text_key):
             "Chinese": "⬇️ 您比 {lower_rank} 領先 {points_ahead} 點。",
         },
         "top_climbers": {
-            "English": "𝗧𝗼𝗽 𝗖𝗹𝗶𝗺𝗯𝗲𝗿𝘀:\n",
-            "Chinese": "【高手們】：\n"
+            "English": "🏆 𝗧𝗼𝗽 𝗖𝗹𝗶𝗺𝗯𝗲𝗿𝘀:\n",
+            "Chinese": "🏆【高手們】：\n"
         },
         "rank_info": {
             "English": "{medal} Rank {rank} - {points} points (Level {level})\n",
@@ -275,6 +278,32 @@ def get_translated_text(user_id, text_key):
                         "爬越多層樓梯，累積越多點數，衝上排行榜！\n\n"
                         "🎉【贏得獎勵】\n"
                         "站上排行榜頂端，解鎖每月限定的專屬獎勵！快來加入挑戰吧！🚀"
+        },
+        "default_response": {
+            "English": "🚀 Keep climbing and earning points! Every step brings you closer to the top! 🏆\n"
+                        "For more info, check out the menu below. 📋\n"  
+                        "💬 Have questions, found an issue, or want to share feedback? Head to \"Others → Feedback\" and let us know! 📝",
+            "Chinese": "🚀 加油加油繼續爬樓梯累積點數吧！🏆\n"
+                        "更多資訊請查看下方選單 📋\n"
+                        "💬 有遇到任何問題或有話想說？點擊選單中的「其它→回饋」區告訴我們吧！📝\n"
+        },
+        "about_us_msg": {
+            "English": "🌟 About Us 🌟\n"
+                        "Hello and welcome to the Staircase Fairy! 🧚‍♀️✨ We're Jasmine Yeh and Edward Teng, two spirited computer science students at the helm of this exciting project lead by Prof. Hsin-Tien Lin.\n"
+                        "Why did we start this project? 🤔 Well, we're based in the bustling labs of the Mechanical Engineering Department, constantly inspired by gears and gadgets! But, we wanted to shift gears to something that impacts our planet positively. 🌍\n"
+                        "Our mission? To turn every step you take on the staircase into a leap for environmental health! By swapping lifts for lifts of your feet, we aim to reduce our carbon footprint one floor at a time. It’s about making healthier choices for ourselves and Mother Earth. 🌱💪\n"
+                        "Join us in climbing to a greener future—where each step counts not just for your health but for the planet’s too. Let’s step up to the challenge and make a difference together! Ready to rise? Let’s climb! 🚀\n"
+                        "Feel free to contact us or reach out if you got any questions 🥳\n"
+                        "b12902135@ntu.edu.tw\n"
+                        "b13902100@ntu.edu.tw\n",
+            "Chinese": "🌟 關於我們 🌟\n"
+                        "歡迎來到樓梯精靈的奇幻世界！🧚✨ 我們是Jasmine Yeh和Edward Teng，目前就讀資工系。在林心恬教授的帶領下，我們從機械系的實驗室啟程，一路從齒輪轉動到保護地球。\n"
+                        "動機：因為我們想用科技改變世界，從每一步開始，讓地球更健康。不坐電梯，改走樓梯，讓減碳成為日常。\n"
+                        "目標：讓你走的每一步都成為綠色行動的一部分！🌱💪一起用實際行動守護地球，一層樓一個腳印，共同減少碳足跡。\n"
+                        "一起攀登吧，邁向綠色更美好的未來！每一步都有意義，不只是為了健康，更是為了我們共同的家園。準備好接受挑戰了嗎？跟我們一起，向上！🚀\n"
+                        "若有任何問題，歡迎隨時聯絡我們！🥳"
+                        "b12902135@ntu.edu.tw\n"
+                        "b13902100@ntu.edu.tw\n"
         }
     }
 
@@ -328,6 +357,48 @@ def ask_location_permission(user_id):
         )
     )
     line_bot_api.push_message(user_id, buttons_template)
+
+def send_others_menu(user_id):
+    """ Sends the others menu with three options. """
+    buttons_template = TemplateSendMessage(
+        alt_text=get_translated_text(user_id, "others_menu"),
+        template=ButtonsTemplate(
+            text=get_translated_text(user_id, "others_menu"),
+            actions=[
+                PostbackAction(label=get_translated_text(user_id, "about_us"), data="read_about_us"),
+                PostbackAction(label=get_translated_text(user_id, "location_consent"), data="ask_location_consent"),
+                PostbackAction(label=get_translated_text(user_id, "feedback"), data="report_issue_feedback")
+            ]
+        )
+    )
+    line_bot_api.push_message(user_id, buttons_template)
+
+def send_rewards(user_id):
+    """ Sends an image carousel message showcasing rewards. """
+
+    carousel_template = TemplateSendMessage(
+        alt_text="🏆 Check out the rewards you can earn!",
+        template=CarouselTemplate(columns=[
+            CarouselColumn(
+                thumbnail_image_url="https://your-image-url.com/reward1.jpg",
+                title="🥇",
+                text="Earn 50 points to unlock this reward!"
+            ),
+            CarouselColumn(
+                thumbnail_image_url="https://your-image-url.com/reward2.jpg",
+                title="🥈",
+                text="Earn 150 points to unlock this reward!"
+            ),
+            CarouselColumn(
+                thumbnail_image_url="https://your-image-url.com/reward3.jpg",
+                title="🥉",
+                text="Earn 300 points to unlock this exclusive reward!",
+                actions=[URITemplateAction(label="View Details", uri="https://your-reward-details.com/gold")]
+            )
+        ])
+    )
+
+    line_bot_api.push_message(user_id, carousel_template)
 
 def send_points_menu(user_id):
     """ Sends the points menu with two options. """
@@ -506,19 +577,13 @@ def handle_follow(event):
         user_name = profile.display_name  # Extract the user's name
 
         # Send a personalized welcome message
-        welcome_message = f"Hi {user_name}! 🎉 Welcome to Staircase Fairy!\n"
-        welcome_message += f"哈囉 {user_name}！歡迎來到樓梯精靈！🏃‍♂️🏃‍♀️"
+        welcome_message = f"Hi {user_name}! 🌟 Welcome to Staircase Fairy! 🚶‍♂️✨\nCheck out the menu below for more info and start your climbing adventure! 🚀🏆\n\n"
+        welcome_message += f"哈囉 {user_name}！歡迎來到樓梯精靈！請按下方選單查看更多。🏃‍♂️🏃‍♀️"
 
         line_bot_api.push_message(user_id, TextSendMessage(text=welcome_message))
 
         # language settings: choose english or chinese
         send_language_menu(user_id)
-
-        # send users how to play this game
-        send_line_message(user_id, get_translated_text(user_id, "how_to_play"))
-
-        # Ask for location permission
-        ask_location_permission(user_id)
 
     except Exception as e:
         app.logger.error(f"Error fetching user profile: {e}")
@@ -561,6 +626,14 @@ def handle_postback(event):
         conn.commit()
         send_line_message(user_id, "location_denied")
 
+    # Handle others menu
+    elif postback_data == "read_about_us":
+        send_line_message(user_id, "about_us_msg")
+    elif postback_data == "ask_location_consent":
+        ask_location_permission(user_id)
+    elif postback_data == "report_issue_feedback":
+        issue_feedback(user_id)
+
 # handle messages from users
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -576,30 +649,49 @@ def handle_message(event):
             return
 
         # How to play
-        if user_message_stripped_lower.startswith("how to play"):
+        elif user_message_stripped_lower.startswith("how to play"):
             send_line_message(user_id, "how_to_play")
 
         # Language settings
-        if user_message_stripped_lower.startswith("language"):
-            send_language_menu(user_id, get_translated_text(user_id, "how_to_play"))
+        elif user_message_stripped_lower.startswith("language"):
+            send_language_menu(user_id)
         
         # Points: user progress, leaderboard
-        if user_message_stripped_lower.startswith("points"):
+        elif user_message_stripped_lower.startswith("points"):
             send_points_menu(user_id)
 
-        # Issue reports
-        if user_message_stripped_lower.startswith("feedback"):
+        # Rewards
+        elif user_message_stripped_lower.startswith("rewards"):
+
+        # Impacts: CO2 emissions
+        elif user_message_stripped_lower.startswith("impacts"):
+            ????
+
+        # Location consent
+        elif user_message_stripped_lower.startswith("location consent"):
+            ask_location_permission(user_id)
+        
+        # About us
+        elif user_message_stripped_lower.startswith("about us"):
+            send_line_message(user_id, "about_us_msg")
+
+        # Feedback/Issue reports
+        elif user_message_stripped_lower.startswith("feedback") or user_message_stripped_lower.startswith("issue") or user_message_stripped_lower.startswith("report"):
             issue_feedback(user_id)
 
-        if user_message.startswith("I would like to provide feedback or report an issue:") or user_message.startswith("我想提供回饋或回報問題："):
+        elif user_message.startswith("I would like to provide feedback or report an issue:") or user_message.startswith("我想提供回饋或回報問題："):
             report_text = user_message.split("\n", 1)[1]  # Extract the actual report content
             save_report(user_id, report_text)  # Save it in the database
             send_line_message(user_id, get_translated_text(user_id, "issue_received"))
             return
 
         # Easter eggs
-        if user_message_stripped_lower.startswith("mexico"):
+        elif user_message_stripped_lower.startswith("mexico"):
             send_line_message(user_id, "🇲🇽🌮🌯")
+
+        # Default response
+        else:
+            send_line_message(user_id, "default_response")
 
     except Exception as e:
         app.logger.error(f"Error handling message: {e}")
@@ -608,7 +700,7 @@ def handle_qr_scan(user_id, user_message):
     """Handles QR code scan messages."""
     try:
         _, _, floor, location = user_message.split("_")
-        print(floor, location)
+        logging.info(f"User Location - floor: {floor}, {location}")
 
         # Get the current timestamp
         current_time = datetime.datetime.now()
@@ -625,6 +717,7 @@ def handle_qr_scan(user_id, user_message):
         # Fetch the user's location automatically
         user_lat, user_lng = get_user_location()
         print(user_lat, user_lng)
+        logging.info(f"User Location Coordinates: {user_lat}, {user_lng}")
 
         if user_lat is None:
             send_line_message(user_id, "cant_fetch_location")
