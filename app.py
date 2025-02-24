@@ -5,13 +5,12 @@ import datetime
 import requests
 import urllib.parse
 import random
-# import pymysql
 from math import radians, cos, sin, sqrt, atan2
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent, PostbackEvent, PostbackAction, TemplateSendMessage, ButtonsTemplate, LocationMessage, StickerMessage, CarouselTemplate, CarouselColumn, URITemplateAction
-import logging
-logging.basicConfig(level=logging.INFO)
+# import logging
+# logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
@@ -280,30 +279,85 @@ def get_translated_text(user_id, text_key):
                         "站上排行榜頂端，解鎖每月限定的專屬獎勵！快來加入挑戰吧！🚀"
         },
         "default_response": {
-            "English": "🚀 Keep climbing and earning points! Every step brings you closer to the top! 🏆\n"
-                        "For more info, check out the menu below. 📋\n"  
-                        "💬 Have questions, found an issue, or want to share feedback? Head to \"Others → Feedback\" and let us know! 📝",
+            "English": "🚀 Keep climbing and earning points! Every step brings you closer to the top! 🏆\n\n"
+                        "For more info, check out the menu below. 📋\n\n"  
+                        "💬 Have questions, found an issue, or want to share feedback? Head to \"Others → Feedback/Issue report\" and let us know! 📝",
             "Chinese": "🚀 加油加油繼續爬樓梯累積點數吧！🏆\n"
                         "更多資訊請查看下方選單 📋\n"
-                        "💬 有遇到任何問題或有話想說？點擊選單中的「其它→回饋」區告訴我們吧！📝\n"
+                        "💬 有遇到任何問題或有話想說？點擊選單中的「其它→回饋/問題回報」區告訴我們吧！📝"
         },
         "about_us_msg": {
-            "English": "🌟 About Us 🌟\n"
+            "English": "🌟 About Us 🌟\n\n"
                         "Hello and welcome to the Staircase Fairy! 🧚‍♀️✨ We're Jasmine Yeh and Edward Teng, two spirited computer science students at the helm of this exciting project lead by Prof. Hsin-Tien Lin.\n"
                         "Why did we start this project? 🤔 Well, we're based in the bustling labs of the Mechanical Engineering Department, constantly inspired by gears and gadgets! But, we wanted to shift gears to something that impacts our planet positively. 🌍\n"
                         "Our mission? To turn every step you take on the staircase into a leap for environmental health! By swapping lifts for lifts of your feet, we aim to reduce our carbon footprint one floor at a time. It’s about making healthier choices for ourselves and Mother Earth. 🌱💪\n"
                         "Join us in climbing to a greener future—where each step counts not just for your health but for the planet’s too. Let’s step up to the challenge and make a difference together! Ready to rise? Let’s climb! 🚀\n"
-                        "Feel free to contact us or reach out if you got any questions 🥳\n"
+                        "Feel free to contact us or reach out if you got any questions!\n\n"
                         "b12902135@ntu.edu.tw\n"
-                        "b13902100@ntu.edu.tw\n",
-            "Chinese": "🌟 關於我們 🌟\n"
-                        "歡迎來到樓梯精靈的奇幻世界！🧚✨ 我們是Jasmine Yeh和Edward Teng，目前就讀資工系。在林心恬教授的帶領下，我們從機械系的實驗室啟程，一路從齒輪轉動到保護地球。\n"
-                        "動機：因為我們想用科技改變世界，從每一步開始，讓地球更健康。不坐電梯，改走樓梯，讓減碳成為日常。\n"
-                        "目標：讓你走的每一步都成為綠色行動的一部分！🌱💪一起用實際行動守護地球，一層樓一個腳印，共同減少碳足跡。\n"
-                        "一起攀登吧，邁向綠色更美好的未來！每一步都有意義，不只是為了健康，更是為了我們共同的家園。準備好接受挑戰了嗎？跟我們一起，向上！🚀\n"
-                        "若有任何問題，歡迎隨時聯絡我們！🥳"
+                        "b13902100@ntu.edu.tw",
+            "Chinese": "🌟 關於我們 🌟\n\n"
+                        "歡迎來到樓梯精靈的奇幻世界！🧚✨ 我們是Jasmine Yeh和Edward Teng，目前就讀資工系。\n"
+                        "林心恬教授給了我們有趣的點子，促使樓梯精靈的誕生——希望能鼓勵大家到樓梯間尋找樓梯精靈們，參與有趣集點活動，進而少搭電梯，讓減碳成為日常，同時也讓身體更健康！\n"
+                        "🌱💪一起用實際行動守護地球，一層樓一腳印，共同減少碳足跡。\n\n"
+                        "若有任何問題，歡迎聯絡我們！\n"
                         "b12902135@ntu.edu.tw\n"
-                        "b13902100@ntu.edu.tw\n"
+                        "b13902100@ntu.edu.tw"
+        },
+        "check_rewards": {
+            "English": "🏆 Check out the rewards you can earn!",
+            "Chinese": "🏆 快來查看當月獎品！"
+        },
+        "others_menu": {
+            "English": "🛠️ Others",
+            "Chinese": "🛠️ 其它"
+        },
+        "about_us_button": {
+            "English": "🌟 About us",
+            "Chinese": "🌟 關於我們"
+        },
+        "location_consent_button": {
+            "English": "📍 Location consent",
+            "Chinese": "📍 定位設定" 
+        },
+        "feedback_button": {
+            "English": "💬 Issue & Feedback",
+            "Chinese": "💬 回饋 / 問題回報" 
+        },
+        "impact_menu": {
+            "English": "🌍 Choose an impact view:",
+            "Chinese": "🌍 請選擇下列其中一項"
+        },
+        "my_impact": {
+            "English": "📊 My Impact",
+            "Chinese": "📊 個人影響力"
+        },
+        "all_users_impact": {
+            "English": "🌏 All Users' Impact",
+            "Chinese": "🌏 總體影響力"
+        },
+        "personal_impact_progress": {
+            "English": "📊 𝗬𝗼𝘂𝗿 𝗣𝗲𝗿𝘀𝗼𝗻𝗮𝗹 𝗜𝗺𝗽𝗮𝗰𝘁:\n\n"
+                        "🌿 𝗖𝗢𝟮 𝗘𝗺𝗶𝘀𝘀𝗶𝗼𝗻𝘀 𝗦𝗮𝘃𝗲𝗱: {co2_saved} kg\n"
+                        "= 🌳 𝗧𝗿𝗲𝗲𝘀 𝗳𝗼𝗿 𝗢𝗳𝗳𝘀𝗲𝘁: {forest_offset} trees\n"
+                        "= ♻️ 𝗪𝗮𝘀𝘁𝗲 𝗥𝗲𝗰𝘆𝗰𝗹𝗲𝗱: {waste_recycled} kg\n\n"
+                        "Keep climbing and making a difference! 🚀",
+            "Chinese": "📊【您的影響力】\n\n"
+                        "🌿 減少的碳排放量：{co2_saved} 公斤\n"
+                        "= 🌳 樹木吸收碳排放量：{forest_offset} 棵\n"
+                        "= ♻️ 回收垃圾量：{waste_recycled} 公斤\n\n"
+                        "繼續爬樓梯，讓世界變得更綠吧！🚀"
+        },
+        "all_users_impact_progress": {
+            "English": "🌏 𝗔𝗹𝗹 𝗨𝘀𝗲𝗿𝘀' 𝗜𝗺𝗽𝗮𝗰𝘁:\n\n"
+                        "🌿 𝗖𝗢𝟮 𝗘𝗺𝗶𝘀𝘀𝗶𝗼𝗻𝘀 𝗦𝗮𝘃𝗲𝗱: {co2_saved} kg\n"
+                        "= 🌳 𝗧𝗿𝗲𝗲𝘀 𝗳𝗼𝗿 𝗢𝗳𝗳𝘀𝗲𝘁: {forest_offset} trees\n"
+                        "= ♻️ 𝗪𝗮𝘀𝘁𝗲 𝗥𝗲𝗰𝘆𝗰𝗹𝗲𝗱: {waste_recycled} kg\n\n"
+                        "Together, we're making a difference! 💪✨",
+            "Chinese": "🌏【總體影響力】\n\n"
+                        "🌿 減少的碳排放量：{co2_saved} 公斤\n"
+                        "= 🌳 樹木吸收碳排放量：{forest_offset} 棵\n"
+                        "= ♻️ 回收垃圾量：{waste_recycled} 公斤\n\n"
+                        "大家一起努力，讓世界更美好！💪✨"
         }
     }
 
@@ -318,6 +372,20 @@ def send_language_menu(user_id):
             actions=[
                 PostbackAction(label="English", data="language_English"),
                 PostbackAction(label="繁體中文", data="language_Chinese")
+            ]
+        )
+    )
+    line_bot_api.push_message(user_id, buttons_template)
+
+def send_impacts_menu(user_id):
+    """ Sends a menu allowing the user to choose between personal and global impact statistics. """
+    buttons_template = TemplateSendMessage(
+        alt_text=get_translated_text(user_id, "impact_menu"),
+        template=ButtonsTemplate(
+            text=get_translated_text(user_id, "impact_menu"),
+            actions=[
+                PostbackAction(label=get_translated_text(user_id, "my_impact"), data="personal_impacts"),
+                PostbackAction(label=get_translated_text(user_id, "all_users_impact"), data="all_users_impacts")
             ]
         )
     )
@@ -365,9 +433,9 @@ def send_others_menu(user_id):
         template=ButtonsTemplate(
             text=get_translated_text(user_id, "others_menu"),
             actions=[
-                PostbackAction(label=get_translated_text(user_id, "about_us"), data="read_about_us"),
-                PostbackAction(label=get_translated_text(user_id, "location_consent"), data="ask_location_consent"),
-                PostbackAction(label=get_translated_text(user_id, "feedback"), data="report_issue_feedback")
+                PostbackAction(label=get_translated_text(user_id, "about_us_button"), data="read_about_us"),
+                PostbackAction(label=get_translated_text(user_id, "location_consent_button"), data="ask_location_consent"),
+                PostbackAction(label=get_translated_text(user_id, "feedback_button"), data="report_issue_feedback")
             ]
         )
     )
@@ -377,23 +445,22 @@ def send_rewards(user_id):
     """ Sends an image carousel message showcasing rewards. """
 
     carousel_template = TemplateSendMessage(
-        alt_text="🏆 Check out the rewards you can earn!",
+        alt_text=get_translated_text(user_id, "check_rewards"),
         template=CarouselTemplate(columns=[
             CarouselColumn(
-                thumbnail_image_url="https://your-image-url.com/reward1.jpg",
+                thumbnail_image_url="https://drive.google.com/file/d/1gSR8F_Li-CrtGdzDu5oGYPDused8pPwN/view?usp=drive_link",
                 title="🥇",
-                text="Earn 50 points to unlock this reward!"
+                text="Climb to the top of the leaderboard!"
             ),
             CarouselColumn(
-                thumbnail_image_url="https://your-image-url.com/reward2.jpg",
+                thumbnail_image_url="https://drive.google.com/file/d/1-ETkoVNtRXnt7EWSsqjZX7wneHbi5_Vj/view?usp=drive_link",
                 title="🥈",
                 text="Earn 150 points to unlock this reward!"
             ),
             CarouselColumn(
-                thumbnail_image_url="https://your-image-url.com/reward3.jpg",
+                thumbnail_image_url="https://drive.google.com/file/d/1bb3RPSVcGm6lAB-2NQ23IYP78fz3faw6/view?usp=drive_link",
                 title="🥉",
-                text="Earn 300 points to unlock this exclusive reward!",
-                actions=[URITemplateAction(label="View Details", uri="https://your-reward-details.com/gold")]
+                text="Earn 300 points to unlock this exclusive reward!"
             )
         ])
     )
@@ -565,6 +632,56 @@ def save_report(user_id, report_text):
                    (user_id, report_text, timestamp))
     conn.commit()
 
+def calculate_co2_saved(stair_levels):
+    """ Calculate kg of CO2 saved by climbing stairs instead of taking an elevator. """
+    co2_per_level = 0.027  # kg CO2 saved per stair level climbed
+    return round(stair_levels * co2_per_level, 2)
+
+def calculate_forest_offset(co2_saved):
+    """ Calculate equivalent number of trees needed to offset the same amount of CO2. """
+    co2_sequestration_per_tree = 25  # kg CO2 absorbed per tree per year
+    return round(co2_saved / co2_sequestration_per_tree, 2)
+
+def calculate_waste_recycled(co2_saved):
+    """ Calculate kg of waste recycled to achieve the same CO2 reduction. """
+    co2_saved_per_kg_waste = 2.87  # 1 kg waste recycled = 2.87 kg CO2 saved
+    return round(co2_saved / co2_saved_per_kg_waste, 2)
+
+def send_personal_impact(user_id):
+    """ Sends the user's personal environmental impact statistics. """
+    cursor.execute("SELECT SUM(floor) FROM scan_logs WHERE user_id = ?", (user_id,))
+    result = cursor.fetchone()
+    stair_levels = result[0] if result and result[0] else 0
+
+    co2_saved = calculate_co2_saved(stair_levels)
+    forest_offset = calculate_forest_offset(co2_saved)
+    waste_recycled = calculate_waste_recycled(co2_saved)
+
+    message = get_translated_text(user_id, "personal_impact_progress").format(
+        co2_saved=co2_saved,
+        forest_offset=forest_offset,
+        waste_recycled=waste_recycled
+    )
+    send_line_message(user_id, message)
+
+def send_all_users_impact(user_id):
+    """ Sends the total environmental impact from all users. """
+    cursor.execute("SELECT SUM(floor) FROM scan_logs")
+    result = cursor.fetchone()
+    total_stair_levels = result[0] if result and result[0] else 0
+
+    co2_saved = calculate_co2_saved(total_stair_levels)
+    forest_offset = calculate_forest_offset(co2_saved)
+    waste_recycled = calculate_waste_recycled(co2_saved)
+
+    message = get_translated_text(user_id, "all_users_impact_progress").format(
+        co2_saved=co2_saved,
+        forest_offset=forest_offset,
+        waste_recycled=waste_recycled
+    )
+    send_line_message(user_id, message)
+
+
 # when user first adds the bot
 @handler.add(FollowEvent) 
 def handle_follow(event):
@@ -634,6 +751,12 @@ def handle_postback(event):
     elif postback_data == "report_issue_feedback":
         issue_feedback(user_id)
 
+    # Handle impact menu
+    elif postback_data == "personal_impacts":
+        send_personal_impact(user_id)
+    elif postback_data == "all_users_impacts":
+        send_all_users_impact(user_id)
+
 # handle messages from users
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -661,11 +784,15 @@ def handle_message(event):
             send_points_menu(user_id)
 
         # Rewards
-        elif user_message_stripped_lower.startswith("rewards"):
+        # elif user_message_stripped_lower.startswith("rewards"):
+        #     send_rewards(user_id)
 
         # Impacts: CO2 emissions
         elif user_message_stripped_lower.startswith("impacts"):
-            ????
+            send_impacts_menu(user_id)
+
+        elif user_message_stripped_lower.startswith("others"):
+            send_others_menu(user_id)
 
         # Location consent
         elif user_message_stripped_lower.startswith("location consent"):
@@ -690,7 +817,7 @@ def handle_message(event):
             send_line_message(user_id, "🇲🇽🌮🌯")
 
         # Default response
-        else:
+        elif not user_message_stripped_lower.startswith("rewards"):
             send_line_message(user_id, "default_response")
 
     except Exception as e:
@@ -700,7 +827,7 @@ def handle_qr_scan(user_id, user_message):
     """Handles QR code scan messages."""
     try:
         _, _, floor, location = user_message.split("_")
-        logging.info(f"User Location - floor: {floor}, {location}")
+        # logging.info(f"User Location - floor: {floor}, {location}")
 
         # Get the current timestamp
         current_time = datetime.datetime.now()
@@ -717,7 +844,7 @@ def handle_qr_scan(user_id, user_message):
         # Fetch the user's location automatically
         user_lat, user_lng = get_user_location()
         print(user_lat, user_lng)
-        logging.info(f"User Location Coordinates: {user_lat}, {user_lng}")
+        # logging.info(f"User Location Coordinates: {user_lat}, {user_lng}")
 
         if user_lat is None:
             send_line_message(user_id, "cant_fetch_location")
@@ -829,4 +956,4 @@ def webhook():
     return jsonify({"status": "ok"}), 200  # ✅ Always return 200 OK
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=True)
