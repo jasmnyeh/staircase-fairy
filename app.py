@@ -9,8 +9,6 @@ from math import radians, cos, sin, sqrt, atan2
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent, PostbackEvent, PostbackAction, TemplateSendMessage, ButtonsTemplate, LocationMessage, StickerMessage, CarouselTemplate, CarouselColumn, URITemplateAction
-# import logging
-# logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
@@ -303,10 +301,6 @@ def get_translated_text(user_id, text_key):
                         "b12902135@ntu.edu.tw\n"
                         "b13902100@ntu.edu.tw"
         },
-        "check_rewards": {
-            "English": "🏆 Check out the rewards you can earn!",
-            "Chinese": "🏆 快來查看當月獎品！"
-        },
         "others_menu": {
             "English": "🛠️ Others",
             "Chinese": "🛠️ 其它"
@@ -440,32 +434,6 @@ def send_others_menu(user_id):
         )
     )
     line_bot_api.push_message(user_id, buttons_template)
-
-def send_rewards(user_id):
-    """ Sends an image carousel message showcasing rewards. """
-
-    carousel_template = TemplateSendMessage(
-        alt_text=get_translated_text(user_id, "check_rewards"),
-        template=CarouselTemplate(columns=[
-            CarouselColumn(
-                thumbnail_image_url="https://drive.google.com/file/d/1gSR8F_Li-CrtGdzDu5oGYPDused8pPwN/view?usp=drive_link",
-                title="🥇",
-                text="Climb to the top of the leaderboard!"
-            ),
-            CarouselColumn(
-                thumbnail_image_url="https://drive.google.com/file/d/1-ETkoVNtRXnt7EWSsqjZX7wneHbi5_Vj/view?usp=drive_link",
-                title="🥈",
-                text="Earn 150 points to unlock this reward!"
-            ),
-            CarouselColumn(
-                thumbnail_image_url="https://drive.google.com/file/d/1bb3RPSVcGm6lAB-2NQ23IYP78fz3faw6/view?usp=drive_link",
-                title="🥉",
-                text="Earn 300 points to unlock this exclusive reward!"
-            )
-        ])
-    )
-
-    line_bot_api.push_message(user_id, carousel_template)
 
 def send_points_menu(user_id):
     """ Sends the points menu with two options. """
@@ -783,10 +751,6 @@ def handle_message(event):
         elif user_message_stripped_lower.startswith("points"):
             send_points_menu(user_id)
 
-        # Rewards
-        # elif user_message_stripped_lower.startswith("rewards"):
-        #     send_rewards(user_id)
-
         # Impacts: CO2 emissions
         elif user_message_stripped_lower.startswith("impacts"):
             send_impacts_menu(user_id)
@@ -827,7 +791,7 @@ def handle_qr_scan(user_id, user_message):
     """Handles QR code scan messages."""
     try:
         _, _, floor, location = user_message.split("_")
-        # logging.info(f"User Location - floor: {floor}, {location}")
+        print(floor, location)
 
         # Get the current timestamp
         current_time = datetime.datetime.now()
@@ -844,7 +808,6 @@ def handle_qr_scan(user_id, user_message):
         # Fetch the user's location automatically
         user_lat, user_lng = get_user_location()
         print(user_lat, user_lng)
-        # logging.info(f"User Location Coordinates: {user_lat}, {user_lng}")
 
         if user_lat is None:
             send_line_message(user_id, "cant_fetch_location")
