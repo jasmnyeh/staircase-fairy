@@ -5,7 +5,7 @@ BOT_ID = "@925keedn"
 
 # Function to generate QR locations dynamically
 def generate_qr_locations(location_name, floors):
-    return [{"floor": f"{i}F", "location": location_name} for i in range(1, floors + 1)]
+    return [{"floor": f"{i}-{i+1}F", "location": location_name} for i in range(1, floors + 1)]
 
 # List of locations with floors
 target_locations = [

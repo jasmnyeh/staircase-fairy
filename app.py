@@ -352,6 +352,10 @@ def get_translated_text(user_id, text_key):
                         "= 🌳 樹木吸收碳排放量：{forest_offset} 棵\n"
                         "= ♻️ 回收垃圾量：{waste_recycled} 公斤\n\n"
                         "大家一起努力，讓世界更美好！💪✨"
+        },
+        "rewards_unavailable": {
+            "English": "No rewards will be provided during the trial period :( Stay tuned!!",
+            "Chinese": "試跑期間沒有提供精美獎品，再稍等一會兒！"
         }
     }
 
@@ -428,7 +432,6 @@ def send_others_menu(user_id):
             text=get_translated_text(user_id, "others_menu"),
             actions=[
                 PostbackAction(label=get_translated_text(user_id, "about_us_button"), data="read_about_us"),
-                PostbackAction(label=get_translated_text(user_id, "location_consent_button"), data="ask_location_consent"),
                 PostbackAction(label=get_translated_text(user_id, "feedback_button"), data="report_issue_feedback")
             ]
         )
@@ -675,7 +678,7 @@ def handle_follow(event):
         # Fallback if unable to fetch name
         line_bot_api.push_message(user_id, TextSendMessage(text="Hi! 🎉 Welcome to Staircase Fairy!\n哈囉！歡迎來到樓梯精靈！🏃‍♂️🏃‍♀️"))
         send_language_menu(user_id)
-        ask_location_permission(user_id)
+        # ask_location_permission(user_id)
 
 # handle responses from buttons
 @handler.add(PostbackEvent)
@@ -714,8 +717,8 @@ def handle_postback(event):
     # Handle others menu
     elif postback_data == "read_about_us":
         send_line_message(user_id, "about_us_msg")
-    elif postback_data == "ask_location_consent":
-        ask_location_permission(user_id)
+    # elif postback_data == "ask_location_consent":
+    #     ask_location_permission(user_id)
     elif postback_data == "report_issue_feedback":
         issue_feedback(user_id)
 
@@ -759,12 +762,16 @@ def handle_message(event):
             send_others_menu(user_id)
 
         # Location consent
-        elif user_message_stripped_lower.startswith("location consent"):
-            ask_location_permission(user_id)
+        # elif user_message_stripped_lower.startswith("location consent"):
+        #     ask_location_permission(user_id)
         
         # About us
         elif user_message_stripped_lower.startswith("about us"):
             send_line_message(user_id, "about_us_msg")
+
+        # Rewards
+        elif user_message_stripped_lower.startswith("rewards"):
+            send_line_message(user_id, "rewards_unavailable")
 
         # Feedback/Issue reports
         elif user_message_stripped_lower.startswith("feedback") or user_message_stripped_lower.startswith("issue") or user_message_stripped_lower.startswith("report"):
@@ -797,13 +804,13 @@ def handle_qr_scan(user_id, user_message):
         current_time = datetime.datetime.now()
 
         # Check if the user allowed location tracking
-        cursor.execute("SELECT location_consent FROM user_settings WHERE user_id = ?", (user_id,))
-        consent = cursor.fetchone()
+        # cursor.execute("SELECT location_consent FROM user_settings WHERE user_id = ?", (user_id,))
+        # consent = cursor.fetchone()
 
-        if not consent or consent[0] == 0:
-            send_line_message(user_id, "need_to_allow_location")
-            ask_location_permission(user_id) # Ask for permission again
-            return
+        # if not consent or consent[0] == 0:
+        #     send_line_message(user_id, "need_to_allow_location")
+        #     ask_location_permission(user_id) # Ask for permission again
+        #     return
         
         # Fetch the user's location automatically
         user_lat, user_lng = get_user_location()
@@ -816,12 +823,12 @@ def handle_qr_scan(user_id, user_message):
         # Predefined QR Code Locations (Grouped by Location)
         QR_LOCATIONS = {
             "機械系館1": {
-                "coordinates": (25.0216448, 121.5463424),
-                "available_floors": [f"{i}F" for i in range(1, 6)]  # Floors 1F to 5F
+                "coordinates": (25.0216448, 121.5496192),
+                "available_floors": [f"{i}-{i+1}F" for i in range(1, 6)]  # Floors 1F to 5F
             },
             "機械系館2": {
-                "coordinates": (25.0189335, 121.5392110),
-                "available_floors": [f"{i}F" for i in range(1, 5)]  # Floors 1F to 4F
+                "coordinates": (25.0216448, 121.5496192),
+                "available_floors": [f"{i}-{i+1}F" for i in range(1, 6)]  # Floors 1F to 5F
             }
         }
 
@@ -844,7 +851,7 @@ def handle_qr_scan(user_id, user_message):
         # Check distance
         distance = calculate_distance(user_lat, user_lng, qr_lat, qr_lng)
 
-        if distance > 50:
+        if distance > 1500:
             send_line_message(user_id, "too_far_away")
             return
 
@@ -859,7 +866,7 @@ def handle_qr_scan(user_id, user_message):
             last_scan_time = datetime.datetime.strptime(last_scan[0], "%Y/%m/%d %H:%M:%S")
             time_difference = (current_time - last_scan_time).total_seconds()
 
-            if time_difference < 15.000:
+            if time_difference < 10.000:
                 send_line_message(user_id, "wait_longer")
                 return
 
