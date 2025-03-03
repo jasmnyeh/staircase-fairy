@@ -1,12 +1,10 @@
 # Staircase Fairy
-🚶‍♂️ Welcome to Staircase Fairy! 🌱
+Staircase Fairy is a LINE bot designed to encourage stair climbing over elevator use, promoting both healthier habits and carbon footprint reduction. By turning everyday stair climbing into a fun and rewarding challenge, we hope to make sustainability an engaging experience! 
 
-Join our mission to energize and eco-fy your stair-climbing experience! Every step you take is a step towards a greener planet. Start collecting points today by scanning the QR code on each floor as you climb—each floor has its own unique code to track your progress accurately.
+## How it works
+1. **Scan QR Codes** - Each staircase level has a QR code. Scan it to log your climb and earn points.
+2. **Compete & Track Progress** - View your ranking on the leaderboard. Track your personal impact, including CO₂ emissions saved!
+3. **Earn Rewards 🎁** - Unlock monthly rewards if you're on top of the leaderboard!
 
-🔗 How It Works:
-
-1. Scan Each Floor - Ensure to scan the QR code on every floor you ascend to accurately log your climb and earn points.
-2. Climb & Compete - Watch your points accumulate and see where you stand on our monthly leaderboard.
-3. Win & Celebrate - Reach the top of the leaderboard and earn exclusive rewards every month!
-
-🎁 Join us, add this account, and turn your steps into rewards while reducing carbon emissions. It’s not just good for your health; it’s great for our Earth! 🌍
+## Add Staircase Fairy!
+https://line.me/R/ti/p/~@925keedn
