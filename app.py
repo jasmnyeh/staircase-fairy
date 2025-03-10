@@ -652,7 +652,6 @@ def send_all_users_impact(user_id):
     )
     send_line_message(user_id, message)
 
-
 # when user first adds the bot
 @handler.add(FollowEvent) 
 def handle_follow(event):
