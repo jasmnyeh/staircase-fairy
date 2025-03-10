@@ -727,6 +727,20 @@ def handle_postback(event):
     elif postback_data == "all_users_impacts":
         send_all_users_impact(user_id)
 
+    # Handle main menu
+    elif postback_data == "how_to_play":
+        send_line_message(user_id, "how_to_play")
+    elif postback_data == "points_ranking":
+        send_points_menu(user_id)
+    elif postback_data == "impacts":
+        send_impacts_menu(user_id)
+    elif postback_data == "rewards":
+        send_line_message(user_id, "rewards_unavailable")
+    elif postback_data == "language":
+        send_language_menu(user_id)
+    elif postback_data == "others_menu":
+        send_others_menu(user_id)
+
 # handle messages from users
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
